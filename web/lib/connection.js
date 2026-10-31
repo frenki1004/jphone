@@ -61,6 +61,7 @@ export class Connection {
     this.pingTimer = null;
     this.outbox = []; // requests sent while offline, flushed on connect
     this.sentTypes = new Map(); // request id -> request type (bounded)
+    this.metaOnly = new Set(); // get_history ids sent just to refresh the session list
   }
 
   emit(ev) {
@@ -158,6 +159,10 @@ export class Connection {
         // Tag acks with the request type so the reducer can tell a turn's
         // completion from a side request (history, rename, ...).
         if ((ev.type === "done" || ev.type === "error") && this.sentTypes.has(ev.id)) ev.req_type = this.sentTypes.get(ev.id);
+        if (ev.type === "history" && this.metaOnly.delete(ev.id)) {
+          ev.req_type = "get_history";
+          ev.meta_only = true;
+        }
         this.emit(ev);
       }
     };
@@ -203,6 +208,13 @@ export class Connection {
     this.send({ type: "get_history" });
     // Is a turn still running (e.g. phone slept mid-task)? Answered with a `state` event.
     this.send({ type: "state" });
+  }
+
+  // Ask for fresh metadata (open sessions, model list) without reloading the transcript.
+  refreshMeta() {
+    const id = this.send({ type: "get_history" });
+    if (id != null) this.metaOnly.add(id);
+    return id;
   }
 
   rawSend(obj) {

@@ -333,6 +333,16 @@ test("tool finishing after a reconnect still gets a card (live sequence)", () =>
   eq(s.processing, false);
 });
 
+test("drawer refresh updates open sessions without touching a streaming reply", () => {
+  const s = initialState();
+  reduce(s, { type: "local:user", text: "go", requestId: 1 });
+  reduce(s, { type: "text_delta", text: "Halfway" });
+  reduce(s, { type: "history", id: 9, req_type: "get_history", meta_only: true, session_id: "a", all_sessions: ["a", "b"], messages: [{ role: "user", content: "go" }] });
+  eq(s.allSessions, ["a", "b"]);
+  eq(s.entries.map((e) => e.role), ["user", "assistant"]);
+  eq([s.entries[1].text, s.entries[1].streaming, s.processing], ["Halfway", true, true]);
+});
+
 test("helpers", () => {
   eq(friendlyName("session_orangutan_1793478576470_72404828c8ee1114"), "orangutan");
   eq(fmtTokens(950), "950");

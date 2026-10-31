@@ -753,9 +753,13 @@ function openDrawer() {
   scrim.classList.add("on");
   drawer.classList.add("on");
   drawer.setAttribute("aria-hidden", "false");
-  if (conn && conn.connected) conn.send({ type: "get_history" }); // refresh session list
+  if (conn && conn.connected && conn.refreshMeta) conn.refreshMeta(); // which sessions are open on the Mac
+  clearInterval(drawerRefresh);
+  drawerRefresh = setInterval(() => conn && conn.connected && conn.refreshMeta && conn.refreshMeta(), 5000);
 }
+let drawerRefresh = null;
 function closeDrawer() {
+  clearInterval(drawerRefresh);
   scrim.classList.remove("on");
   drawer.classList.remove("on");
   drawer.setAttribute("aria-hidden", "true");
@@ -800,7 +804,7 @@ function relTime(ms) {
 
 function renderDrawer() {
   $("drawer-server").textContent = `${state.serverIcon || ""} ${state.serverName || cfg.serverName || "jcode"}`.trim();
-  $("drawer-version").textContent = [cfg.host, state.serverVersion || cfg.serverVersion].filter(Boolean).join(" · ");
+  $("drawer-version").textContent = [cfg.host, (state.serverVersion || cfg.serverVersion || "").replace(/\s*\(unknown\)/g, "")].filter(Boolean).join(" · ");
   $("drawer-dir").textContent = shortDir(cfg.workingDir) || "Choose a folder…";
   $("drawer-model-name").textContent = state.model || "";
 
@@ -808,7 +812,8 @@ function renderDrawer() {
   const live = new Set(state.allSessions);
   const known = new Map((cfg.sessions || []).map((s) => [s.id, s]));
   const ids = [...new Set([...(state.sessionId ? [state.sessionId] : []), ...state.allSessions, ...known.keys()])];
-  ids.sort((a, b) => (known.get(b)?.at || sessionCreatedAt(b) || 0) - (known.get(a)?.at || sessionCreatedAt(a) || 0));
+  // Sessions currently loaded in jcode on the Mac come first, then most recent.
+  ids.sort((a, b) => (live.has(b) - live.has(a)) || (known.get(b)?.at || sessionCreatedAt(b) || 0) - (known.get(a)?.at || sessionCreatedAt(a) || 0));
   const list = $("session-list");
   if (!ids.length) {
     list.innerHTML = `<li class="empty-row">No sessions yet.</li>`;
@@ -819,10 +824,10 @@ function renderDrawer() {
     .map((id) => {
       const k = known.get(id);
       const when = relTime(k?.at || sessionCreatedAt(id));
-      const where = k?.dir ? shortDir(k.dir) : live.has(id) ? "live on Mac" : "";
+      const where = [live.has(id) ? "open on Mac" : "", k?.dir ? shortDir(k.dir) : ""].filter(Boolean).join(" · ");
       const titled = state.sessionTitles[id] || k?.title;
-      const sub = !titled && k?.preview ? `${when} · ${k.preview}` : [when, where].filter(Boolean).join(" · ");
-      return `<li class="${id === state.sessionId ? "current" : ""}"><button type="button" data-session="${esc(id)}"><span class="s-dot"></span><span class="s-main"><span class="s-name">${esc(sessionLabel(id))}</span><span class="s-when">${esc(sub)}</span></span></button></li>`;
+      const sub = !titled && k?.preview ? [when, live.has(id) ? "open on Mac" : "", k.preview].filter(Boolean).join(" · ") : [when, where].filter(Boolean).join(" · ");
+      return `<li class="${id === state.sessionId ? "current" : ""}${live.has(id) ? " live" : ""}"><button type="button" data-session="${esc(id)}"><span class="s-dot"></span><span class="s-main"><span class="s-name">${esc(sessionLabel(id))}</span><span class="s-when">${esc(sub)}</span></span></button></li>`;
     })
     .join("");
 }

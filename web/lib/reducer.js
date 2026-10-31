@@ -225,6 +225,9 @@ export function reduce(s, ev) {
         s.sessionTitles[s.sessionId] = ev.display_title;
       }
       if (Array.isArray(ev.total_tokens)) s.tokens = { input: ev.total_tokens[0], output: ev.total_tokens[1] };
+      // A refresh requested only for the session list must not touch the
+      // transcript: it would wipe a reply that is still streaming.
+      if (ev.req_type === "get_history" && ev.meta_only) return s;
       const incoming = historyToEntries(ev.messages);
       if (ev.messages_base_count != null && ev.messages_base_count > 0) s.entries.push(...incoming);
       else s.entries = incoming;

@@ -1277,6 +1277,18 @@ kbd {
   padding: 0 16px 14px;
   border-bottom: 1px solid var(--line);
 }
+.drawer-head > div {
+  min-width: 0;
+}
+.drawer-head #drawer-version {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.drawer-head .btn-small {
+  flex: none;
+  white-space: nowrap;
+}
 .drawer-server {
   font: 600 17px/1.2 var(--mono);
   color: var(--header-name);
@@ -1337,10 +1349,19 @@ kbd {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--text-3);
+  background: transparent;
+  border: 1.5px solid var(--text-3);
 }
-.session-list li.current .s-dot {
+/* green = loaded in jcode on the Mac right now */
+.session-list li.live .s-dot {
   background: var(--mint);
+  border-color: var(--mint);
+  box-shadow: 0 0 6px rgba(77, 217, 166, 0.7);
+}
+/* the one you are viewing */
+.session-list li.current .s-dot {
+  outline: 2px solid rgba(77, 217, 166, 0.35);
+  outline-offset: 2px;
 }
 .session-list .s-main {
   flex: 1;
