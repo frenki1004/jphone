@@ -1,0 +1,175 @@
+<div align="center">
+
+<img src="web/icons/icon-192.png" width="88" alt="jPhone icon" />
+
+# jPhone
+
+**Your [jcode](https://github.com/1jehuang/jcode), in your pocket.**
+
+A phone-first web app that talks straight to jcode's built-in gateway.<br />
+Stream replies, watch tool calls, stop or steer a run, and switch sessions, from anywhere on your Tailscale network.
+
+<img src="docs/img/hero.png" alt="jPhone: pairing, a live run with a tool call, and the sessions drawer" />
+
+**No app store · No build step · No dependencies · No third-party servers**
+
+</div>
+
+---
+
+## Why
+
+jcode runs your agent on your Mac. Sometimes you are not at your Mac.
+
+jcode already ships a WebSocket gateway for remote clients, but there is no client you can install yet. jPhone is that client, as a web app: open a URL on your phone, type a 6-digit code once, and you are driving the same jcode that runs on your desk.
+
+## Features
+
+|  |  |
+| --- | --- |
+| **Live streaming** | Replies render as they are written, with Markdown, tables and syntax-highlighted code blocks with a copy button. |
+| **Tool calls, terminal style** | Compact `✓ bash npm test` rows with a running timer. Tap to see the command and its output. Long finished runs fold into one line. |
+| **Stop and steer** | The send button becomes **Stop** while jcode works. Type during a run and the message is queued, then delivered after the current step. |
+| **Sessions** | Swipe in from the left edge for every session on your Mac. Start new ones, switch, rename. |
+| **Model picker** | Every model your jcode can use, searchable. |
+| **Survives your pocket** | The phone sleeps, Wi-Fi drops, you switch to cellular. jPhone reconnects, reattaches to the running session and shows the turn finishing. |
+| **Made for thumbs** | Safe areas for the notch and home bar, a composer that follows the on-screen keyboard, 44px tap targets (48px for Stop), haptics where supported. Tablets get a split view. |
+| **jcode's look** | Colors come from jcode's own TUI palette, down to the braille spinner. |
+
+## Quick start
+
+You need **jcode** with its gateway enabled, **Tailscale** on your Mac and your phone, and **Python 3** (already on macOS).
+
+**1. Enable jcode's gateway** (once). In `~/.jcode/config.toml`:
+
+```toml
+[gateway]
+enabled = true
+port = 7643
+bind_addr = "0.0.0.0"
+```
+
+Restart jcode afterwards. Check it from the Mac with `curl http://localhost:7643/health`.
+
+**2. Run jPhone** on the same Mac:
+
+```sh
+git clone https://github.com/frenki1004/jphone.git
+cd jphone
+python3 serve.py
+```
+
+```
+jPhone is up:
+  http://100.101.102.103:8765
+  http://127.0.0.1:8765
+```
+
+**3. On your phone** (Tailscale on), open the first URL. Then on the Mac:
+
+```sh
+jcode pair
+```
+
+Type the 6-digit code. Pairing happens as soon as you enter the last digit. Pick a project folder (an absolute path such as `/Users/you/code/app`) and start typing.
+
+> **Tip:** In Safari, tap Share → **Add to Home Screen** for a full-screen app icon.
+
+### Start it automatically (macOS)
+
+```sh
+./install-macos.sh            # login item: starts at login, restarts if it crashes
+./install-macos.sh uninstall
+```
+
+It waits for Tailscale to come up. Logs go to `~/Library/Logs/jphone.log`.
+
+### Optional: HTTPS
+
+Plain `http://` over Tailscale works for everything above. Browsers reserve a few extras for HTTPS pages: offline loading, a service worker for home-screen installs, the modern clipboard API and notifications. [Tailscale Serve](https://tailscale.com/kb/1312/serve) can put both jPhone and the gateway behind a real certificate on your tailnet name:
+
+```sh
+tailscale serve --bg --https=443  http://127.0.0.1:8765   # jPhone
+tailscale serve --bg --https=7643 http://127.0.0.1:7643   # jcode gateway
+```
+
+Then open `https://<your-mac>.<tailnet>.ts.net` and pair with that same name. When the page is HTTPS, jPhone talks to the gateway over `https`/`wss` automatically, because browsers block plain `ws://` from secure pages. For the gateway line to bind, set jcode's `bind_addr` to `127.0.0.1` so the two do not fight over port 7643. *This setup is documented but has not been tested end to end yet.*
+
+## Try it without jcode
+
+```sh
+python3 serve.py --bind 127.0.0.1
+open "http://127.0.0.1:8765/?demo"        # also: ?demo=live  ?demo=drawer  ?demo=empty
+```
+
+The demo replays recorded events in the browser. Nothing is sent anywhere.
+
+## How it works
+
+```mermaid
+flowchart LR
+  subgraph Phone
+    UI[jPhone in Safari/Chrome]
+  end
+  subgraph Mac
+    S["serve.py :8765<br/>static files only"]
+    G["jcode gateway :7643<br/>/health · /pair · /ws"]
+    J[jcode agent]
+  end
+  UI -- "HTML, CSS, JS" --> S
+  UI -- "pair once (POST /pair)<br/>then WebSocket /ws?token=…" --> G
+  G <--> J
+```
+
+- **`serve.py`** only hands out static files. It never sees your messages or token. It binds to your Tailscale IP and localhost, never `0.0.0.0`.
+- **The browser talks to jcode's gateway directly.** Pairing exchanges the code for a device token (stored hashed on the Mac). The WebSocket carries the same newline-delimited JSON protocol jcode's own clients use.
+- **The app is plain ES modules**: `web/lib/reducer.js` (pure state machine: events → transcript), `connection.js` (pairing, reconnect with backoff, session reattach), `markdown.js` (escape-first Markdown and a small highlighter). About 2k lines of JavaScript, no framework.
+
+<details>
+<summary><b>Protocol notes</b> (things learned the hard way)</summary>
+
+- `subscribe` **requires an absolute `working_dir`**, otherwise the gateway replies with an error and closes the socket.
+- `done` acknowledges *every* request, not just messages. jPhone tags each request id with its type so a `get_history` ack mid-run never ends the turn early.
+- After a reconnect, request ids from the old socket are never answered. jPhone sends `state` on subscribe: `is_processing: true` restores the running indicator, and the turn ends on the next message completion.
+- jcode offers stdin to every shell command and closes it after 1.5 s without a reply. Too fast for a phone, so jPhone does not show input prompts.
+- `rename_session` with no title clears the custom name. `session_renamed.title` is then absent and `display_title` falls back to the session's animal name.
+
+</details>
+
+## Security
+
+- **Reachable only on your tailnet.** jPhone binds to your Tailscale IP. jcode's gateway uses its own `bind_addr`, so set it to your Tailscale IP if you do not want it on your LAN either.
+- **Device tokens** are stored in the phone's `localStorage` and can be revoked any time: `jcode pair --list`, `jcode pair --revoke <id>`. A revoked phone shows a *Re-pair* banner.
+- **Untrusted output is escaped.** Model and tool output goes through an escape-first renderer, and only `http(s)` and `mailto` links become clickable.
+- **jcode can run commands on your Mac.** Anyone who can use your paired phone can too. Treat it like an open SSH session.
+
+## Development
+
+```sh
+./test/run.sh          # 40 tests, runs on macOS's built-in JavaScriptCore (or Node)
+tools/screenshots.sh   # regenerate docs/img from the demo (macOS, uses WebKit)
+```
+
+```
+web/            the app (index.html, styles.css, app.js, lib/, icons/, sw.js)
+test/           headless tests, including replays of real gateway sessions
+spike/          protocol spike client and the recorded fixtures the tests use
+tools/          WebKit screenshot harness and README image composer
+serve.py        static server (stdlib only)
+```
+
+The tests replay event sequences recorded from a live jcode gateway, covering streaming, tool calls, stop, queued follow-ups, reconnecting mid-tool, renames and errors.
+
+## Status and limitations
+
+- **Tested** end-to-end against a real jcode gateway (v0.99) in WebKit, the engine behind iPhone Safari, at 393×852, 320×568 and 1024×768. **Not yet tested on a physical iPhone or Android phone.** Reports welcome.
+- **No image attachments yet.** jcode's `message` request already accepts images, so this is the obvious next step. No push notifications either: jPhone is a web page, so it only shows activity while it is open.
+- **No interactive stdin**, see protocol notes.
+
+## Credits
+
+Built on top of [jcode](https://github.com/1jehuang/jcode) by Jeremy Huang and its gateway protocol. Not affiliated with the jcode project.
+
+## License
+
+[MIT](LICENSE)

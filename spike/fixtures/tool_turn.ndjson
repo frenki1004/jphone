@@ -1,0 +1,41 @@
+{"type":"ack","id":1}
+{"type":"swarm_status","members":[{"session_id":"session_orangutan_1793478576470_0000000000000000","friendly_name":"orangutan","status":"ready","role":"agent","is_headless":false,"live_attachments":1,"status_age_secs":0,"runtime":{"elapsed_secs":0}}]}
+{"type":"session","session_id":"session_orangutan_1793478576470_0000000000000000"}
+{"type":"done","id":1}
+{"type":"ack","id":2}
+{"type":"swarm_status","members":[{"session_id":"session_orangutan_1793478576470_0000000000000000","friendly_name":"orangutan","status":"running","detail":"List the files in the current directory using a tool, then reply in one short sentence.","role":"coordinator","is_headless":false,"live_attachments":1,"status_age_secs":0,"runtime":{"elapsed_secs":0}}]}
+{"type":"kv_cache_request","system_static_hash":10160753406802333350,"tools_hash":16456693221804450600,"messages_hash":7486907411460014770,"message_hashes":[417698962967033442,10301053928029648929],"message_count":2,"tool_count":28,"system_static_chars":1121,"tools_json_chars":52358,"messages_json_chars":547,"ephemeral_chars":2,"ephemeral_message_count":0}
+{"type":"connection_type","connection":"https/sse"}
+{"type":"connection_phase","phase":"sending request"}
+{"type":"connection_phase","phase":"waiting for response"}
+{"type":"tool_start","id":"toolu_016bvNHmSsA7zbsjeNpt3J3M","name":"bash"}
+{"type":"connection_phase","phase":"streaming"}
+{"type":"tool_input","id":"toolu_016bvNHmSsA7zbsjeNpt3J3M","delta":""}
+{"type":"tool_input","id":"toolu_016bvNHmSsA7zbsjeNpt3J3M","delta":"{\"comma"}
+{"type":"tool_input","id":"toolu_016bvNHmSsA7zbsjeNpt3J3M","delta":"nd\": \"l"}
+{"type":"tool_input","id":"toolu_016bvNHmSsA7zbsjeNpt3J3M","delta":"s -A\""}
+{"type":"tool_input","id":"toolu_016bvNHmSsA7zbsjeNpt3J3M","delta":", \"inte"}
+{"type":"tool_input","id":"toolu_016bvNHmSsA7zbsjeNpt3J3M","delta":"nt\": \"L"}
+{"type":"tool_input","id":"toolu_016bvNHmSsA7zbsjeNpt3J3M","delta":"ist fil"}
+{"type":"tool_input","id":"toolu_016bvNHmSsA7zbsjeNpt3J3M","delta":"es\"}"}
+{"type":"tool_exec","id":"toolu_016bvNHmSsA7zbsjeNpt3J3M","name":"bash"}
+{"type":"message_end","stop_reason":"tool_use"}
+{"type":"tokens","input":231,"output":73,"cache_read_input":23093,"cache_creation_input":0}
+{"type":"tool_done","id":"toolu_016bvNHmSsA7zbsjeNpt3J3M","name":"bash","output":"README.md\napp\ndocs\npackage.json\nsrc\ntests\n"}
+{"type":"kv_cache_request","system_static_hash":10160753406802333350,"tools_hash":16456693221804450600,"messages_hash":18269719123889947331,"message_hashes":[417698962967033442,10301053928029648929,18319634755587937220,9496677895331311985],"message_count":4,"tool_count":28,"system_static_chars":1121,"tools_json_chars":52358,"messages_json_chars":1118,"ephemeral_chars":2,"ephemeral_message_count":0}
+{"type":"connection_type","connection":"https/sse"}
+{"type":"connection_phase","phase":"sending request"}
+{"type":"connection_phase","phase":"waiting for response"}
+{"type":"connection_phase","phase":"streaming"}
+{"type":"text_delta","text":"The curre"}
+{"type":"text_delta","text":"nt directo"}
+{"type":"text_delta","text":"ry has 6 e"}
+{"type":"text_delta","text":"ntries: R"}
+{"type":"text_delta","text":"EADME.md, "}
+{"type":"text_delta","text":"app, docs,"}
+{"type":"text_delta","text":" package."}
+{"type":"text_delta","text":"json, src "}
+{"type":"text_delta","text":"and tests."}
+{"type":"message_end","stop_reason":"end_turn"}
+{"type":"tokens","input":112,"output":70,"cache_read_input":23093,"cache_creation_input":304}
+{"type":"done","id":2}

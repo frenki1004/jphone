@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta name="theme-color" content="#0f0f14" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="jPhone" />
+    <meta name="format-detection" content="telephone=no" />
+    <title>jPhone</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="app" class="app" data-view="boot">
+      <!-- Pairing -------------------------------------------------------- -->
+      <section class="pair" aria-labelledby="pair-title">
+        <div class="pair-inner">
+          <div class="brand">
+            <div class="logo" aria-hidden="true"><span class="logo-j">j</span><span class="logo-cursor"></span></div>
+            <h1 id="pair-title">jPhone</h1>
+            <p class="muted">Your jcode, in your pocket.</p>
+          </div>
+
+          <form id="pair-form" class="card pair-card" autocomplete="off" novalidate>
+            <ol class="steps">
+              <li><span class="step-n">1</span> On your Mac, run <code class="copyable" data-copy-text="jcode pair">jcode pair</code></li>
+              <li><span class="step-n">2</span> Enter the host and 6-digit code it shows</li>
+            </ol>
+
+            <label class="field">
+              <span>Host</span>
+              <div class="input-row">
+                <input id="pair-host" name="host" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="your-mac.tailnet.ts.net" required />
+                <span id="pair-health" class="health" aria-live="polite"></span>
+              </div>
+            </label>
+
+            <label class="field">
+              <span>Pairing code</span>
+              <input id="pair-code" name="code" class="code-input" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]*" maxlength="7" placeholder="000 000" required />
+            </label>
+
+            <details class="advanced">
+              <summary>Advanced</summary>
+              <label class="field">
+                <span>Gateway port</span>
+                <input id="pair-port" name="port" inputmode="numeric" value="7643" />
+              </label>
+            </details>
+
+            <p id="pair-error" class="error-text" role="alert"></p>
+            <button id="pair-submit" class="btn btn-primary" type="submit">
+              <span class="btn-label">Pair</span>
+              <span class="spinner" aria-hidden="true"></span>
+            </button>
+          </form>
+
+          <p class="muted small center">Traffic stays on your Tailscale network. Nothing goes through a third party.</p>
+        </div>
+      </section>
+
+      <!-- Chat ----------------------------------------------------------- -->
+      <section class="chat" aria-label="Chat">
+        <header class="topbar">
+          <button id="btn-sessions" class="icon-btn" type="button" aria-label="Sessions">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h10M4 17h16" /></svg>
+          </button>
+          <button id="btn-title" class="title" type="button" aria-label="Session details">
+            <span class="title-line">
+              <span id="server-icon" class="server-icon"></span>
+              <span id="session-name" class="session-name">jcode</span>
+              <span id="conn-dot" class="dot" aria-hidden="true"></span>
+            </span>
+            <span id="session-sub" class="title-sub"></span>
+          </button>
+          <button id="btn-new" class="icon-btn" type="button" aria-label="New session">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+          </button>
+        </header>
+
+        <div id="banner" class="banner" role="status" aria-live="polite" hidden></div>
+
+        <main id="scroller" class="scroller">
+          <div id="transcript" class="transcript" aria-live="polite"></div>
+          <div id="empty" class="empty" hidden>
+            <div class="empty-logo" aria-hidden="true">❯<span class="logo-cursor"></span></div>
+            <p class="empty-title">What should jcode do?</p>
+            <p id="empty-dir" class="muted small"></p>
+            <div id="suggestions" class="suggestions"></div>
+          </div>
+        </main>
+
+        <button id="jump" class="jump" type="button" aria-label="Scroll to latest" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+        </button>
+
+        <footer class="composer-wrap">
+          <div id="status" class="status" aria-live="polite"></div>
+          <form id="composer" class="composer">
+            <textarea id="input" rows="1" placeholder="Message jcode" enterkeyhint="send" autocapitalize="sentences" aria-label="Message"></textarea>
+            <button id="send" class="send" type="submit" aria-label="Send" disabled>
+              <svg class="i-send" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
+              <svg class="i-stop" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" /></svg>
+            </button>
+          </form>
+        </footer>
+      </section>
+
+      <!-- Sessions drawer ------------------------------------------------- -->
+      <div id="scrim" class="scrim" hidden></div>
+      <aside id="drawer" class="drawer" aria-label="Sessions" aria-hidden="true">
+        <div class="drawer-head">
+          <div>
+            <div id="drawer-server" class="drawer-server">jcode</div>
+            <div id="drawer-version" class="muted small"></div>
+          </div>
+          <button id="drawer-new" class="btn btn-small" type="button">+ New</button>
+        </div>
+        <div class="drawer-section">
+          <div class="section-label">Project folder</div>
+          <button id="drawer-dir" class="dir-btn" type="button"></button>
+        </div>
+        <div class="drawer-section grow">
+          <div class="section-label">Sessions</div>
+          <ul id="session-list" class="session-list"></ul>
+        </div>
+        <div class="drawer-foot">
+          <button id="drawer-model" class="row-btn" type="button">
+            <span>Model</span><span id="drawer-model-name" class="row-val muted"></span>
+          </button>
+          <button id="drawer-unpair" class="row-btn danger" type="button"><span>Forget this Mac</span></button>
+        </div>
+      </aside>
+
+      <!-- Sheets (model picker, folder, rename) ------------------------- -->
+      <dialog id="sheet" class="sheet">
+        <form method="dialog" class="sheet-inner">
+          <div class="sheet-grip" aria-hidden="true"></div>
+          <h2 id="sheet-title"></h2>
+          <div id="sheet-body"></div>
+        </form>
+      </dialog>
+
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    </div>
+
+    <noscript>jPhone needs JavaScript.</noscript>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

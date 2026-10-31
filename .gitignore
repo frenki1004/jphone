@@ -1,0 +1,6 @@
+.DS_Store
+__pycache__/
+*.token
+pair.json
+tools/shot
+tools/hero
