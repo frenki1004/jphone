@@ -40,6 +40,16 @@
               <li><span class="step-n">2</span> Enter the host and 6-digit code it shows</li>
             </ol>
 
+            <div class="pair-quick">
+              <button id="pair-scan" class="btn" type="button">Scan QR</button>
+              <button id="pair-paste" class="btn" type="button">Paste link</button>
+            </div>
+            <div id="pair-scanner" class="pair-scanner" hidden>
+              <video id="pair-video" playsinline muted></video>
+              <p class="muted small center">Point the camera at the QR from <code>tools/pair-qr.py</code></p>
+              <button id="pair-scan-cancel" class="btn" type="button">Cancel</button>
+            </div>
+
             <label class="field">
               <span>Host</span>
               <div class="input-row">

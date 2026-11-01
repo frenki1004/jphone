@@ -359,6 +359,27 @@ kbd {
   cursor: pointer;
   list-style: none;
 }
+
+.pair-quick {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.pair-quick[hidden],
+.pair-scanner[hidden] {
+  display: none;
+}
+.pair-scanner {
+  display: grid;
+  gap: 10px;
+}
+.pair-scanner video {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 14px;
+  background: #000;
+}
 .advanced summary::-webkit-details-marker {
   display: none;
 }

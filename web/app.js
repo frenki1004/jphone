@@ -3,6 +3,7 @@ import { initialState, reduce, friendlyName, sessionCreatedAt, toolSummary, fmtT
 import { Connection, gatewayBase, checkHealth, pair } from "./lib/connection.js";
 import { render as renderMd, esc } from "./lib/markdown.js";
 import { parsePairFragment } from "./lib/pairlink.js";
+import { parsePairText, scanQR, cameraAvailable } from "./lib/scan.js";
 import { turnNotice } from "./lib/notify.js";
 import { prepareImage, MAX_IMAGES } from "./lib/images.js";
 import { fileChanges } from "./lib/changes.js";
@@ -148,6 +149,61 @@ const pairPort = $("pair-port");
 const pairErr = $("pair-error");
 const pairBtn = $("pair-submit");
 const pairHealth = $("pair-health");
+
+// Scan QR / Paste link: both end in the same prefilled form as opening a
+// pairing link, so you still check the host and tap Pair.
+const scanBox = $("pair-scanner");
+const quick = document.querySelector(".pair-quick");
+let scanning = null;
+function stopScan() {
+  if (scanning) scanning.stop();
+  scanning = null;
+  scanBox.hidden = true;
+  quick.hidden = false;
+}
+function usePairText(text, from) {
+  const link = parsePairText(text);
+  if (!link) {
+    pairErr.textContent = `That ${from} is not a jPhone pairing link. Make one with tools/pair-qr.py on the Mac.`;
+    return;
+  }
+  initPairing("", link);
+}
+$("pair-scan").hidden = !cameraAvailable();
+$("pair-scan").addEventListener("click", async () => {
+  pairErr.textContent = "";
+  quick.hidden = true;
+  scanBox.hidden = false;
+  scanning = scanQR($("pair-video"));
+  try {
+    const text = await scanning.result;
+    stopScan();
+    haptic(15);
+    usePairText(text, "QR code");
+  } catch (e) {
+    stopScan();
+    if (e.message !== "stopped") pairErr.textContent = e.message || "Could not start the camera.";
+  }
+});
+$("pair-scan-cancel").addEventListener("click", stopScan);
+$("pair-paste").addEventListener("click", async () => {
+  pairErr.textContent = "";
+  let text = "";
+  try {
+    text = await navigator.clipboard.readText();
+  } catch {
+    text = prompt("Paste the pairing link") || "";
+  }
+  if (text) usePairText(text, "text");
+});
+// A whole link pasted into the host field works too.
+pairHost.addEventListener("paste", (e) => {
+  const text = (e.clipboardData || window.clipboardData).getData("text");
+  if (/#pair=|:\d{1,5}:\d{3} ?\d{3}\s*$/.test(text) && parsePairText(text)) {
+    e.preventDefault();
+    usePairText(text, "text");
+  }
+});
 
 function initPairing(message, link = null) {
   setView("pair");

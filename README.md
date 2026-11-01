@@ -11,7 +11,7 @@ Stream replies, watch tool calls, stop or steer a run, and switch sessions, from
 
 <img src="docs/img/hero.png" alt="jPhone: pairing, a live run with a tool call, and the sessions drawer" />
 
-**No app store · No build step · No dependencies · No third-party servers**
+**No app store · No build step · No third-party servers · One vendored library (jsQR, for the QR scanner)**
 
 </div>
 
@@ -94,6 +94,8 @@ tools/pair-qr.py --https    # jPhone behind tailscale serve (see Optional: HTTPS
 It runs `jcode pair` and prints a QR code in the terminal for a link like `http://100.101.102.103:8765/#pair=100.101.102.103:7643:123456`. Scan it with the phone's camera, check the host, tap **Pair**. The part after `#` is never sent to any server, and jPhone removes it from the address bar once read. Python standard library only (it carries a small QR encoder). `--app URL`, `--gateway HOST:PORT` and `--code 123456` override what it detects.
 
 The QR code from `jcode pair` itself is for jcode's iOS app (`jcode://…`) and does not open jPhone.
+
+**Already in the Home Screen app?** The phone's camera always opens links in Safari, and on iPhone the Home Screen app has its own storage. So pair from inside the app instead: tap **Scan QR** on jPhone's pairing screen and point it at the same QR, or copy the link (long-press the camera's link preview) and tap **Paste link**. Pasting the whole link into the Host field works too. Either way the form fills in and you confirm with **Pair**. The scanner uses the browser's own QR detector when there is one (Android Chrome) and otherwise the vendored [jsQR](web/vendor/README.md) (Apache-2.0), which loads only when you tap Scan.
 
 ### Start it automatically (macOS)
 
