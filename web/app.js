@@ -8,6 +8,7 @@ import { prepareImage, MAX_IMAGES } from "./lib/images.js";
 import { fileChanges } from "./lib/changes.js";
 import { touchDir, forgetDir, seedDirs, cleanDir } from "./lib/recent.js";
 import { lockAvailable, lockToken, unlockToken, lockoutSeconds, validPin, RELOCK_AFTER_MS } from "./lib/lock.js";
+import { urlB64ToBytes, subscriptionBody, sameKey } from "./lib/push.js";
 
 const $ = (id) => document.getElementById(id);
 const app = $("app");
@@ -94,6 +95,7 @@ function dispatch(ev) {
   if (state.sessionId !== before && state.sessionId) {
     store.save({ sessionId: state.sessionId });
     restoreDraft();
+    if (state.processing) pushWatch(); // first message of a new session: the id arrives after it
   }
   if (ev.type === "local:phase") onPhase(ev);
   if (ev.type === "done" || ev.type === "error" || ev.type === "interrupted") onTurnMaybeEnded(wasProcessing, ev);
@@ -692,6 +694,7 @@ function submit() {
     dispatch({ type: "local:user", text, images: previews, queued: true });
   } else {
     const id = conn.send({ type: "message", content: text, ...extra });
+    pushWatch();
     cfg = store.save({ recentDirs: touchDir(cfg.recentDirs, cfg.workingDir) });
     dispatch({ type: "local:user", text, images: previews, requestId: id });
     if (!conn.connected) toast("Offline: will send when reconnected");
@@ -770,7 +773,7 @@ function stop() {
 
 // --- notifications ---------------------------------------------------------------
 // Only while the page is alive: open, or in the background until the OS
-// suspends it. jcode has no push server, so a closed app gets nothing.
+// suspends it. A closed app is reached only through the optional push relay (below).
 
 const notifyOn = () => !!cfg.notify && notifyStatus() === "granted";
 const notifyHide = () => cfg.notifyHide !== false; // content hidden unless turned off
@@ -785,7 +788,7 @@ function onTurnMaybeEnded(wasProcessing, ev) {
   const n = turnNotice(wasProcessing, state, ev, { hideContent: notifyHide(), label: sessionLabel() });
   if (!n) return;
   if (navigator.setAppBadge) navigator.setAppBadge(1).catch(() => {});
-  if (notifyOn()) showNotification(n);
+  if (notifyOn() && !cfg.push) showNotification(n); // with push on, the relay sends it (no duplicates)
 }
 
 async function showNotification({ title, body, tag }) {
@@ -811,6 +814,100 @@ async function showNotification({ title, body, tag }) {
 
 function clearAttention() {
   if (navigator.clearAppBadge) navigator.clearAppBadge().catch(() => {});
+}
+
+// --- push (optional) ----------------------------------------------------------------
+// With tools/push-relay.py running on the Mac, notifications also arrive when
+// jPhone is closed. The relay sits behind serve.py at /push/ (same origin, no
+// CSP change) and checks our device token against jcode before doing anything.
+
+const pushCapable = () => window.isSecureContext && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+let pushEndpoint = null; // this browser's subscription endpoint, once known
+
+async function pushApi(path, body) {
+  const r = await fetch(`push/${path}`, {
+    method: body ? "POST" : "GET",
+    headers: body ? { "Content-Type": "application/json", Authorization: `Bearer ${cfg.token || ""}` } : {},
+    body: body ? JSON.stringify(body) : undefined,
+    cache: "no-store",
+  });
+  let j = {};
+  try {
+    j = await r.json();
+  } catch {
+    /* not json: no relay behind this server */
+  }
+  if (!r.ok) throw new Error(j.error || (r.status === 404 || r.status === 405 ? "No push relay behind this server (tools/push-relay.py)." : `HTTP ${r.status}`));
+  return j;
+}
+
+async function pushEnable() {
+  const info = await pushApi("info");
+  if (!info.vapid_key) throw new Error("The push relay did not send its key.");
+  const p = Notification.permission === "default" ? await Notification.requestPermission() : Notification.permission;
+  if (p !== "granted") throw new Error("Notifications are not allowed for jPhone.");
+  const reg = await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (sub && !sameKey(sub, info.vapid_key)) {
+    await sub.unsubscribe();
+    sub = null;
+  }
+  sub = sub || (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToBytes(info.vapid_key) }));
+  await pushApi("subscribe", subscriptionBody(sub, notifyHide()));
+  pushEndpoint = sub.endpoint;
+  cfg = store.save({ push: true });
+  pushWatch();
+  pushSeen(true);
+}
+
+async function pushDisable() {
+  cfg = store.save({ push: false });
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      await pushApi("unsubscribe", { endpoint: sub.endpoint }).catch(() => {});
+      await sub.unsubscribe();
+    }
+  } catch {
+    /* already gone */
+  }
+  pushEndpoint = null;
+}
+
+// Re-send the subscription (the hide setting changed, or the relay restarted fresh).
+async function pushResync() {
+  if (!cfg.push || !pushCapable()) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) return void (cfg = store.save({ push: false }));
+    pushEndpoint = sub.endpoint;
+    await pushApi("subscribe", subscriptionBody(sub, notifyHide()));
+  } catch {
+    /* relay offline: try again next start */
+  }
+}
+
+// Ask the relay to watch the session we just wrote in. Best effort.
+function pushWatch() {
+  if (!cfg.push || !state.sessionId) return;
+  pushApi("watch", { session_id: state.sessionId }).catch(() => {});
+}
+
+// On screen -> the relay holds pushes for this phone (you are looking at it).
+let seenTimer = null;
+function pushSeen(visible) {
+  clearInterval(seenTimer);
+  if (!cfg.push || !pushEndpoint) return;
+  const ping = (v) => pushApi("seen", { endpoint: pushEndpoint, visible: v }).catch(() => {});
+  ping(visible);
+  if (visible) seenTimer = setInterval(() => !document.hidden && ping(true), 30000);
+}
+
+function clearAttentionAndSeen() {
+  clearAttention();
+  pushSeen(true);
 }
 
 // drafts
@@ -1259,7 +1356,13 @@ function openSettingsSheet() {
        <li><button type="button" data-set="hide"><span>Hide message content</span><span class="muted">${onOff(notifyHide())}</span></button></li>
        ${notifyOn() ? `<li><button type="button" data-set="test"><span>Send a test notification</span><span></span></button></li>` : ""}
      </ul>
-     <p class="muted small flush">${why ? esc(why) : "Works while jPhone is open or recently in the background. Phones suspend background pages after a while, and jcode has no push service, so a closed app is not notified."}</p>
+     <p class="muted small flush">${why ? esc(why) : "Works while jPhone is open or recently in the background. Phones suspend background pages after a while. For a closed app, use Push below."}</p>
+     <div class="section-label tight">Push (optional)</div>
+     <ul class="opt-list">
+       <li><button type="button" data-set="push"${pushCapable() ? "" : " disabled"}><span>Notify even when jPhone is closed</span><span class="muted">${pushCapable() ? onOff(!!cfg.push) : "unavailable"}</span></button></li>
+       ${cfg.push ? `<li><button type="button" data-set="push-test"><span>Send a test push</span><span></span></button></li>` : ""}
+     </ul>
+     <p class="muted small flush">${pushCapable() ? "Needs the push relay running on the Mac (<code>tools/push-relay.py</code>, see README). Messages are end-to-end encrypted, but go through your browser's push service (Apple, Google or Mozilla)." : "Needs HTTPS, and on iPhone jPhone added to the Home Screen (iOS 16.4 or later)."}</p>
      <div class="section-label tight">App lock</div>
      <ul class="opt-list">
        ${
@@ -1287,7 +1390,33 @@ function openSettingsSheet() {
                 if (p !== "granted") toast("Notifications not allowed");
               }
             }
-            if (a === "hide") cfg = store.save({ notifyHide: !notifyHide() });
+            if (a === "hide") {
+              cfg = store.save({ notifyHide: !notifyHide() });
+              pushResync();
+            }
+            if (a === "push") {
+              b.disabled = true;
+              try {
+                if (cfg.push) {
+                  await pushDisable();
+                  toast("Push is off");
+                } else {
+                  await pushEnable();
+                  toast("Push is on");
+                }
+              } catch (e) {
+                cfg = store.save({ push: false });
+                toast(e.message || "Could not turn on push");
+              }
+            }
+            if (a === "push-test") {
+              try {
+                const r = await pushApi("test", {});
+                toast(r.sent ? "Sent. Lock the phone to see it arrive." : "Nothing sent: is this phone subscribed?");
+              } catch (e) {
+                toast(e.message);
+              }
+            }
             if (a === "pin") return openPinSheet();
             if (a === "lock-now") return relock();
             if (a === "lock-off") {
@@ -1354,8 +1483,11 @@ document.addEventListener("securitypolicyviolation", (e) => {
 });
 
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden) return void (hiddenAt = Date.now());
-  clearAttention();
+  if (document.hidden) {
+    pushSeen(false);
+    return void (hiddenAt = Date.now());
+  }
+  clearAttentionAndSeen();
   if (cfg.lock && cfg.token && hiddenAt && Date.now() - hiddenAt > RELOCK_AFTER_MS) relock();
   hiddenAt = 0;
   if (conn) conn.kick();
@@ -1366,6 +1498,8 @@ window.addEventListener("pageshow", (e) => e.persisted && conn && conn.kick());
 if ("serviceWorker" in navigator && window.isSecureContext) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
 }
+// Push on: tell the relay we are here (also re-registers after a relay reset).
+if (cfg.push && cfg.token) pushResync().then(() => !document.hidden && pushSeen(true));
 
 // --- boot ------------------------------------------------------------------------
 

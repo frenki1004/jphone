@@ -33,7 +33,7 @@ jcode already ships a WebSocket gateway for remote clients, but there is no clie
 | **Stop and steer** | The send button becomes **Stop** while jcode works. Type during a run and the message is queued, then delivered after the current step. |
 | **Sessions** | Swipe in from the left edge for every session on your Mac. Start new ones, switch, rename. |
 | **Photos** | Attach up to 6 photos or screenshots (camera, library or paste). Big photos are scaled to 1568 px JPEG on the phone before sending. |
-| **Notifications** | Optional: a notification when a turn finishes or fails while jPhone is in the background, with message content hidden by default ([limits](#status-and-limitations)). |
+| **Notifications** | Optional: a notification when a turn finishes or fails while jPhone is in the background, with message content hidden by default. Add the optional [push relay](#optional-push-notifications-when-jphone-is-closed) and they also arrive when jPhone is closed. |
 | **Model picker** | Every model your jcode can use, searchable. |
 | **Recent projects** | The folders you used, most recent first, in the folder picker and as one-tap chips on a new session. |
 | **Quick, locked pairing** | Pair by scanning a QR code from `tools/pair-qr.py`. Optional PIN lock that keeps the device token encrypted ([security](#security)). |
@@ -123,6 +123,41 @@ refuses to replace anything else you already serve on those ports, and prints th
 
 Needs MagicDNS and HTTPS certificates turned on for your tailnet (admin console → DNS). `serve` keeps both on your tailnet; never use `tailscale funnel` for this, which would put them on the public internet. *Tested here with dry runs and a stub `tailscale`, not yet end to end against a live jcode.*
 
+### Optional: push notifications when jPhone is closed
+
+Phones suspend web pages in the background, so on its own jPhone can only notify you while it is still alive. The optional **push relay** fixes that. It is a small service on the Mac, next to jcode:
+
+```mermaid
+flowchart LR
+  P[jPhone] -- "/push/ (same origin)" --> S[serve.py]
+  S --> R[tools/push-relay.py<br/>127.0.0.1 only]
+  R -- "watches the sessions you write in<br/>(its own paired device)" --> G[jcode gateway]
+  R -- "encrypted Web Push" --> PS[Apple / Google / Mozilla<br/>push service]
+  PS --> SW[jPhone service worker] --> N[notification]
+```
+
+```sh
+./install-macos.sh push             # once: own venv with `cryptography`, pairs the relay with jcode, login item
+./install-macos.sh push uninstall   # remove it again
+```
+
+Then in jPhone: Settings → **Notify even when jPhone is closed**. It needs [HTTPS](#optional-https), and on iPhone jPhone added to the Home Screen (iOS 16.4 or later). Running it by hand works too: `python3 -m pip install --user cryptography`, then `tools/push-relay.py --pair` once and `tools/push-relay.py`.
+
+How it behaves:
+
+- When you send a message, jPhone asks the relay to watch that session. The relay attaches as its own paired device, read-only, and pushes when the turn finishes or fails. A Stop you pressed is not pushed.
+- While jPhone is on screen it tells the relay so, and nothing is pushed. With push on, jPhone's in-page notifications step aside, so you never get two.
+- Watching ends 6 hours after your last message in that session.
+- Without the relay, nothing changes: the toggle just says the relay is not running.
+
+Privacy and security:
+
+- **The relay only accepts paired phones.** Every call carries the phone's jcode device token, and the relay checks it against jcode itself by opening (and closing) a gateway connection. A revoked phone is turned away. It stores a hash of the token, never the token.
+- **Pushes are end-to-end encrypted** (RFC 8291, `aes128gcm`, with VAPID). The push service run by your browser's vendor sees the ciphertext, its size and timing, not the text. With *Hide message content* on (the default), the encrypted payload itself only says "jcode finished".
+- The relay listens on `127.0.0.1` only. The phone reaches it through `serve.py` at `/push/`, so no new port is exposed and the page's security policy is unchanged.
+- Its state (VAPID key, the relay's own jcode token, subscriptions) lives in `~/.config/jphone/push.json`, mode 600. Revoke the relay like any device: `jcode pair --revoke "jPhone push relay"`.
+- It is the one part of jPhone with a dependency (`cryptography`, for P-256 and AES-GCM), which is why it is optional and gets its own venv.
+
 ## Try it without jcode
 
 ```sh
@@ -194,6 +229,7 @@ Inside the jcode TUI, `/remote status` lists devices and `/remote revoke <device
 **Notifications**
 
 - With **Hide message content** on (the default), notifications only say that a turn finished or failed, not what jcode wrote. Turn it off to see the first line of the reply on your lock screen.
+- The optional push relay has its own section: [privacy and security](#optional-push-notifications-when-jphone-is-closed).
 
 **What jPhone shows you**
 
@@ -212,16 +248,17 @@ The agent reads files, web pages, issue text and command output. Any of it can c
 ## Development
 
 ```sh
-./test/run.sh          # 70+ tests, runs on macOS's built-in JavaScriptCore (or Node)
-tools/screenshots.sh   # regenerate docs/img from the demo (macOS, uses WebKit)
+./test/run.sh                   # 70+ tests, runs on macOS's built-in JavaScriptCore (or Node)
+python3 test/push_relay_test.py # push relay: RFC 8291 test vector, VAPID, turn tracking (needs cryptography)
+tools/screenshots.sh            # regenerate docs/img from the demo (macOS, uses WebKit)
 ```
 
 ```
 web/            the app (index.html, styles.css, app.js, lib/, icons/, sw.js)
 test/           headless tests, including replays of real gateway sessions
 spike/          protocol spike client and the recorded fixtures the tests use
-tools/          pair-qr.py, https-setup.sh, WebKit screenshot harness, README image composer
-serve.py        static server (stdlib only)
+tools/          pair-qr.py, https-setup.sh, push-relay.py (optional), WebKit screenshot harness, README image composer
+serve.py        static server (stdlib only), proxies /push/ to the relay when it runs
 ```
 
 The tests replay event sequences recorded from a live jcode gateway, covering streaming, tool calls, stop, queued follow-ups, reconnecting mid-tool, renames and errors. The newer pure modules (notifications, lock, photos, files changed, pairing links, recent folders) have their own tests; the lock's crypto tests need WebCrypto and run under Node only.
@@ -231,7 +268,8 @@ The tests replay event sequences recorded from a live jcode gateway, covering st
 - **Tested** end-to-end against a real jcode gateway (v0.99) in WebKit, the engine behind iPhone Safari, at 393×852, 320×568 and 1024×768. **Not yet tested on a physical iPhone or Android phone.** Reports welcome.
 - **Newer features** (pairing links and QR, app lock, notifications, photos, recent projects, files changed, the CSP) were tested in headless Chromium at 390×844 against a stub gateway that speaks the same protocol, not yet against a real jcode or in WebKit.
 - **Photos show only in the session you sent them from.** After a reload, jcode's history still has them, but jPhone does not render history images yet.
-- **Notifications only while the page is alive.** Settings → *Notify when jcode finishes* (HTTPS only; on iPhone, from the Home Screen app) shows a notification when a turn ends or fails while jPhone is in the background. Phones suspend background pages after a while (iOS within seconds to minutes), and a closed app gets nothing. Real Web Push would need jcode to send pushes through a push service, which it does not do (pairing accepts an `apns_token` for a native iOS app, but nothing in jcode sends to it, and a web page could not receive APNs anyway). There is also no separate "needs input" signal in the gateway protocol: jcode is waiting for you exactly when a turn ends, so that is when jPhone notifies.
+- **Notifications without the push relay only arrive while the page is alive.** Settings → *Notify when jcode finishes* (HTTPS only; on iPhone, from the Home Screen app) shows a notification when a turn ends or fails while jPhone is in the background. Phones suspend background pages after a while (iOS within seconds to minutes). For notifications when jPhone is closed, run the optional [push relay](#optional-push-notifications-when-jphone-is-closed). There is no separate "needs input" signal in the gateway protocol: jcode is waiting for you exactly when a turn ends, so that is when jPhone notifies.
+- **Push relay testing.** Tested against a live jcode (v0.99): a real turn started by another client produced exactly one push, decrypted correctly by an independent RFC 8291 implementation, nothing while the page was on screen, no reply text with *Hide message content*, and an unpaired token was refused. The jPhone side (Settings toggle, subscription, `/push/` proxy, service worker push handler) was tested in Chromium with a stand-in push subscription, because headless browsers cannot register with Google's push service. **Not yet tested with real Apple or Google push delivery to a phone.**
 - **No interactive stdin**, see protocol notes.
 
 ## Credits
