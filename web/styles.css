@@ -1520,6 +1520,9 @@ kbd {
 .sheet .opt-list button[data-dir] {
   font: 14px/1.3 var(--mono);
 }
+.sheet .opt-list button:disabled {
+  opacity: 0.45;
+}
 .sheet .opt-list button:active {
   background: var(--surface);
 }

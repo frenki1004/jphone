@@ -177,6 +177,10 @@ jcode pair --revoke <id-or-name>  # e.g. jcode pair --revoke "jPhone (iPhone)"
 
 Inside the jcode TUI, `/remote status` lists devices and `/remote revoke <device>` does the same. Revocation takes effect on the next connection attempt, because the gateway checks the device registry on every WebSocket handshake. A connection that is already open is not cut, so if the phone is out of your hands, also restart jcode. The revoked phone shows a *Re-pair* banner. **Forget this Mac** in jPhone only deletes the token from the phone; run `--revoke` too.
 
+**Notifications**
+
+- With **Hide message content** on (the default), notifications only say that a turn finished or failed, not what jcode wrote. Turn it off to see the first line of the reply on your lock screen.
+
 **What jPhone shows you**
 
 - **Untrusted output is escaped.** Model and tool output goes through an escape-first renderer, and only `http(s)` and `mailto` links become clickable.
@@ -211,7 +215,8 @@ The tests replay event sequences recorded from a live jcode gateway, covering st
 ## Status and limitations
 
 - **Tested** end-to-end against a real jcode gateway (v0.99) in WebKit, the engine behind iPhone Safari, at 393×852, 320×568 and 1024×768. **Not yet tested on a physical iPhone or Android phone.** Reports welcome.
-- **No image attachments yet.** jcode's `message` request already accepts images, so this is the obvious next step. No push notifications either: jPhone is a web page, so it only shows activity while it is open.
+- **No image attachments yet.** jcode's `message` request already accepts images, so this is the obvious next step.
+- **Notifications only while the page is alive.** Settings → *Notify when jcode finishes* (HTTPS only; on iPhone, from the Home Screen app) shows a notification when a turn ends or fails while jPhone is in the background. Phones suspend background pages after a while (iOS within seconds to minutes), and a closed app gets nothing. Real Web Push would need jcode to send pushes through a push service, which it does not do (pairing accepts an `apns_token` for a native iOS app, but nothing in jcode sends to it, and a web page could not receive APNs anyway). There is also no separate "needs input" signal in the gateway protocol: jcode is waiting for you exactly when a turn ends, so that is when jPhone notifies.
 - **No interactive stdin**, see protocol notes.
 
 ## Credits

@@ -3,6 +3,7 @@ import { initialState, reduce, friendlyName, sessionCreatedAt, toolSummary, fmtT
 import { Connection, gatewayBase, checkHealth, pair } from "./lib/connection.js";
 import { render as renderMd, esc } from "./lib/markdown.js";
 import { parsePairFragment } from "./lib/pairlink.js";
+import { turnNotice } from "./lib/notify.js";
 
 const $ = (id) => document.getElementById(id);
 const app = $("app");
@@ -74,6 +75,7 @@ function dispatch(ev) {
   eventLog.push(ev.type === "local:phase" ? `phase:${ev.phase}` : ev.type + (ev.id != null ? `#${ev.id}` : "") + (ev.message ? `:${ev.message}` : ""));
   if (eventLog.length > 200) eventLog.shift();
   const before = state.sessionId;
+  const wasProcessing = state.processing;
   state = reduce(state, ev);
   if (ev.type === "history") skipEnterAnim = true; // history appears instantly
   if (ev.type === "history" && state.sessionId) rememberSession(state.sessionId);
@@ -88,7 +90,7 @@ function dispatch(ev) {
     restoreDraft();
   }
   if (ev.type === "local:phase") onPhase(ev);
-  if (ev.type === "done" || ev.type === "error" || ev.type === "interrupted") onTurnMaybeEnded();
+  if (ev.type === "done" || ev.type === "error" || ev.type === "interrupted") onTurnMaybeEnded(wasProcessing, ev);
   scheduleRender();
 }
 
@@ -585,22 +587,49 @@ function stop() {
   toast("Stopping…");
 }
 
-function onTurnMaybeEnded() {
-  if (!state.processing && document.hidden && "Notification" in window && Notification.permission === "granted") {
-    try {
-      new Notification("jcode finished", { body: lastAssistantSnippet(), tag: "jphone-turn", icon: "icons/icon-192.png" });
-    } catch {
-      /* not allowed outside SW on some platforms */
-    }
+// --- notifications ---------------------------------------------------------------
+// Only while the page is alive: open, or in the background until the OS
+// suspends it. jcode has no push server, so a closed app gets nothing.
+
+const notifyOn = () => !!cfg.notify && notifyStatus() === "granted";
+const notifyHide = () => cfg.notifyHide !== false; // content hidden unless turned off
+
+function notifyStatus() {
+  if (!("Notification" in window)) return window.isSecureContext ? "unsupported" : "needs-https";
+  return Notification.permission; // "granted" | "denied" | "default"
+}
+
+function onTurnMaybeEnded(wasProcessing, ev) {
+  if (!document.hidden && document.hasFocus()) return; // you are looking at it
+  const n = turnNotice(wasProcessing, state, ev, { hideContent: notifyHide(), label: sessionLabel() });
+  if (!n) return;
+  if (navigator.setAppBadge) navigator.setAppBadge(1).catch(() => {});
+  if (notifyOn()) showNotification(n);
+}
+
+async function showNotification({ title, body, tag }) {
+  const opts = { body, tag, renotify: true, icon: "icons/icon-192.png", badge: "icons/icon-192.png", data: { url: location.href.split("#")[0] } };
+  // Android Chrome only allows notifications from the service worker
+  // (`new Notification` throws there); desktop browsers allow both.
+  try {
+    const reg = "serviceWorker" in navigator && (await Promise.race([navigator.serviceWorker.getRegistration(), new Promise((r) => setTimeout(r, 1000))]));
+    if (reg && reg.showNotification) return await reg.showNotification(title, opts);
+  } catch {
+    /* fall through */
+  }
+  try {
+    const note = new Notification(title, opts);
+    note.onclick = () => {
+      window.focus();
+      note.close();
+    };
+  } catch {
+    /* not allowed here */
   }
 }
 
-function lastAssistantSnippet() {
-  for (let i = state.entries.length - 1; i >= 0; i--) {
-    const e = state.entries[i];
-    if (e.role === "assistant" && e.text) return e.text.replace(/\s+/g, " ").slice(0, 140);
-  }
-  return "";
+function clearAttention() {
+  if (navigator.clearAppBadge) navigator.clearAppBadge().catch(() => {});
 }
 
 // drafts
@@ -896,6 +925,10 @@ $("drawer-model").addEventListener("click", () => {
   closeDrawer();
   openModelSheet();
 });
+$("drawer-settings").addEventListener("click", () => {
+  closeDrawer();
+  openSettingsSheet();
+});
 $("drawer-unpair").addEventListener("click", () => {
   if (confirm("Forget this Mac? You'll need a new code from `jcode pair` to reconnect.")) forget();
 });
@@ -1012,6 +1045,46 @@ function openSessionSheet() {
   );
 }
 
+function openSettingsSheet() {
+  const st = notifyStatus();
+  const why = {
+    "needs-https": "Browsers only allow notifications on HTTPS pages. See “Optional: HTTPS” in the README.",
+    unsupported: "This browser has no notifications. On iPhone, add jPhone to the Home Screen first (Share → Add to Home Screen) and open it from there.",
+    denied: "Notifications are blocked for this site. Allow them in the browser's site settings.",
+  }[st];
+  const onOff = (v) => (v ? "On" : "Off");
+  openSheet(
+    "Settings",
+    `<div class="section-label tight">Notifications</div>
+     <ul class="opt-list">
+       <li><button type="button" data-set="notify"${why ? " disabled" : ""}><span>Notify when jcode finishes</span><span class="muted">${why ? "unavailable" : onOff(notifyOn())}</span></button></li>
+       <li><button type="button" data-set="hide"><span>Hide message content</span><span class="muted">${onOff(notifyHide())}</span></button></li>
+       ${notifyOn() ? `<li><button type="button" data-set="test"><span>Send a test notification</span><span></span></button></li>` : ""}
+     </ul>
+     <p class="muted small flush">${why ? esc(why) : "Works while jPhone is open or recently in the background. Phones suspend background pages after a while, and jcode has no push service, so a closed app is not notified."}</p>
+     <div class="sheet-actions"><button class="btn" value="cancel">Done</button></div>`,
+    (body) => {
+      body.querySelectorAll("[data-set]").forEach(
+        (b) =>
+          (b.onclick = async () => {
+            const a = b.dataset.set;
+            if (a === "notify") {
+              if (notifyOn()) cfg = store.save({ notify: false });
+              else {
+                const p = Notification.permission === "default" ? await Notification.requestPermission() : Notification.permission;
+                cfg = store.save({ notify: p === "granted" });
+                if (p !== "granted") toast("Notifications not allowed");
+              }
+            }
+            if (a === "hide") cfg = store.save({ notifyHide: !notifyHide() });
+            if (a === "test") showNotification({ title: "jcode finished", body: notifyHide() ? "Your turn. Open jPhone to see the reply." : "This is what a finished turn looks like.", tag: "jphone-test" });
+            openSettingsSheet(); // re-render in place
+          })
+      );
+    }
+  );
+}
+
 function openModelSheet() {
   const models = state.models || [];
   const render = (q) =>
@@ -1063,6 +1136,7 @@ document.addEventListener("securitypolicyviolation", (e) => {
 });
 
 document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) clearAttention();
   if (!document.hidden && conn) conn.kick();
 });
 window.addEventListener("online", () => conn && conn.kick());
