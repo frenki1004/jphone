@@ -10,7 +10,7 @@ for f in test/*.test.js; do
   if [ -x "$JSC" ]; then
     "$JSC" -m "$f" || status=1
   else
-    node --input-type=module -e "globalThis.print=console.log;globalThis.readFile=p=>require('fs').readFileSync(p,'utf8');await import('./$f')" || status=1
+    node --input-type=module -e "import { readFileSync } from 'node:fs';globalThis.print=console.log;globalThis.readFile=p=>readFileSync(p,'utf8');await import('./$f')" || status=1
   fi
 done
 exit $status
