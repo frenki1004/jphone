@@ -101,14 +101,22 @@ It waits for Tailscale to come up. Logs go to `~/Library/Logs/jphone.log`.
 
 ### Optional: HTTPS
 
-Plain `http://` over Tailscale works for everything above. Browsers reserve a few extras for HTTPS pages: offline loading, a service worker for home-screen installs, the modern clipboard API and notifications. [Tailscale Serve](https://tailscale.com/kb/1312/serve) can put both jPhone and the gateway behind a real certificate on your tailnet name:
+Plain `http://` over Tailscale works for chatting. Browsers keep some features for HTTPS pages: the **app lock** and **notifications**, offline loading and home-screen installs (service worker), and the modern clipboard API. [Tailscale Serve](https://tailscale.com/kb/1312/serve) gives jPhone and the gateway a real certificate on your tailnet name, in one command:
+
+```sh
+tools/https-setup.sh             # add --dry-run to only print the commands
+```
+
+It runs
 
 ```sh
 tailscale serve --bg --https=443  http://127.0.0.1:8765   # jPhone
 tailscale serve --bg --https=7643 http://127.0.0.1:7643   # jcode gateway
 ```
 
-Then open `https://<your-mac>.<tailnet>.ts.net` and pair with that same name. When the page is HTTPS, jPhone talks to the gateway over `https`/`wss` automatically, because browsers block plain `ws://` from secure pages. For the gateway line to bind, set jcode's `bind_addr` to `127.0.0.1` so the two do not fight over port 7643. *This setup is documented but has not been tested end to end yet.*
+refuses to replace anything else you already serve on those ports, and prints the remaining step: set jcode's `bind_addr = "127.0.0.1"` and restart jcode, so the gateway is only reachable through Tailscale Serve. Then open `https://<your-mac>.<tailnet>.ts.net` and pair with that same name (or `tools/pair-qr.py --https`). When the page is HTTPS, jPhone talks to the gateway over `https`/`wss` automatically, because browsers block plain `ws://` from secure pages. `tools/https-setup.sh --off` removes both entries.
+
+Needs MagicDNS and HTTPS certificates turned on for your tailnet (admin console → DNS). `serve` keeps both on your tailnet; never use `tailscale funnel` for this, which would put them on the public internet. *Tested here with dry runs and a stub `tailscale`, not yet end to end against a live jcode.*
 
 ## Try it without jcode
 
