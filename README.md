@@ -46,10 +46,12 @@ You need **jcode** with its gateway enabled, **Tailscale** on your Mac and your 
 [gateway]
 enabled = true
 port = 7643
-bind_addr = "0.0.0.0"
+bind_addr = "100.101.102.103"   # your Mac's Tailscale IP: `tailscale ip -4`
 ```
 
-Restart jcode afterwards. Check it from the Mac with `curl http://localhost:7643/health`.
+Restart jcode afterwards. Check it from the Mac with `curl http://100.101.102.103:7643/health` (your IP).
+
+> **Why not `0.0.0.0`?** jcode's own default is `0.0.0.0`, which listens on *every* network your Mac is on: home Wi-Fi, a café, a hotel, an office LAN. Anyone who can reach the port can try pairing codes, and a paired device can run commands on your Mac. Binding to the Tailscale IP means only devices on your tailnet can even open a connection. The catch: jcode must start after Tailscale is up, or the gateway fails to bind (restart jcode if that happens). If you use the [HTTPS setup](#optional-https) instead, bind to `127.0.0.1`.
 
 **2. Run jPhone** on the same Mac:
 
@@ -138,10 +140,42 @@ flowchart LR
 
 ## Security
 
-- **Reachable only on your tailnet.** jPhone binds to your Tailscale IP. jcode's gateway uses its own `bind_addr`, so set it to your Tailscale IP if you do not want it on your LAN either.
-- **Device tokens** are stored in the phone's `localStorage` and can be revoked any time: `jcode pair --list`, `jcode pair --revoke <id>`. A revoked phone shows a *Re-pair* banner.
+jPhone is a remote control for an agent that can run commands on your Mac. Treat a paired phone like an open SSH session.
+
+**Network**
+
+- **Keep everything on your tailnet.** `serve.py` binds to your Tailscale IP and localhost, never `0.0.0.0`. Bind jcode's gateway to the Tailscale IP too (see [Quick start](#quick-start)), or to `127.0.0.1` behind `tailscale serve`. Do not expose port 7643 to the internet or put it behind a public reverse proxy.
+- **Use HTTPS when you can** ([setup](#optional-https)). Over plain `http://` the traffic is still encrypted by Tailscale's WireGuard tunnel, but the browser treats the page as insecure: no notifications, no service worker, no offline loading.
+- **Tailscale ACLs** can limit which of your devices may reach the Mac's ports 8765 and 7643.
+
+**Pairing and tokens**
+
+- A pairing code is single use and expires after 5 minutes.
+- Pairing gives the phone a device token, stored in the browser's `localStorage` (jcode keeps only a hash). The token travels in the WebSocket URL (`/ws?token=…`) because browsers cannot set an `Authorization` header on a WebSocket. jcode logs that it saw query-token auth, but not the token.
+
+**Revoking a device**
+
+On the Mac:
+
+```sh
+jcode pair --list                 # every paired device, with its id and last-seen time
+jcode pair --revoke <id-or-name>  # e.g. jcode pair --revoke "jPhone (iPhone)"
+```
+
+Inside the jcode TUI, `/remote status` lists devices and `/remote revoke <device>` does the same. Revocation takes effect on the next connection attempt, because the gateway checks the device registry on every WebSocket handshake. A connection that is already open is not cut, so if the phone is out of your hands, also restart jcode. The revoked phone shows a *Re-pair* banner. **Forget this Mac** in jPhone only deletes the token from the phone; run `--revoke` too.
+
+**What jPhone shows you**
+
 - **Untrusted output is escaped.** Model and tool output goes through an escape-first renderer, and only `http(s)` and `mailto` links become clickable.
-- **jcode can run commands on your Mac.** Anyone who can use your paired phone can too. Treat it like an open SSH session.
+
+**Prompt injection**
+
+The agent reads files, web pages, issue text and command output. Any of it can contain instructions written to hijack the agent ("ignore previous instructions and run …"). jPhone cannot detect that, and from a phone you see less of what jcode is reading than at your desk. So:
+
+- Point it at project folders that hold nothing you could not afford to lose or leak.
+- Be careful asking it to browse, fetch URLs or read untrusted repositories while you are away.
+- Watch the tool rows. **Stop** cancels the current turn immediately.
+- Do not keep secrets the agent can read (`.env` files, keys) in reach of a remote session.
 
 ## Development
 
