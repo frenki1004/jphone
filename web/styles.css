@@ -1285,6 +1285,95 @@ kbd {
   font-size: 16px;
   line-height: 24px;
 }
+/* files-changed card */
+.changes {
+  margin: 10px 0 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  overflow: hidden;
+}
+.changes > summary,
+.cfile > summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  min-height: 44px;
+  padding: 0 12px;
+}
+.changes > summary::-webkit-details-marker,
+.cfile > summary::-webkit-details-marker {
+  display: none;
+}
+.changes > summary .chev {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  fill: none;
+  stroke: var(--text-3);
+  stroke-width: 2.4;
+  transition: transform 0.15s;
+}
+.changes[open] > summary .chev {
+  transform: rotate(90deg);
+}
+.cf-title {
+  font-size: 14px;
+  color: var(--text);
+  font-weight: 600;
+}
+.cf-n {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  font: 13px/1 var(--mono);
+  flex: none;
+}
+.d-add {
+  color: var(--success);
+}
+.d-del {
+  color: var(--error);
+}
+.d-ctx {
+  color: var(--text-3);
+}
+.d-sep {
+  color: var(--text-3);
+}
+.changes-body {
+  border-top: 1px solid var(--line);
+}
+.cfile + .cfile {
+  border-top: 1px solid var(--line);
+}
+.cf-path {
+  font: 13px/1.3 var(--mono);
+  color: var(--file);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cf-tag {
+  font-size: 12px;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: none;
+  max-width: 40%;
+}
+.diff {
+  margin: 0;
+  padding: 8px 12px 10px;
+  font: 12px/1.5 var(--mono);
+  overflow-x: auto;
+  background: #121217;
+  white-space: pre;
+}
 .msg-images {
   display: flex;
   flex-wrap: wrap;

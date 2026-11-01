@@ -5,6 +5,7 @@ import { render as renderMd, esc } from "./lib/markdown.js";
 import { parsePairFragment } from "./lib/pairlink.js";
 import { turnNotice } from "./lib/notify.js";
 import { prepareImage, MAX_IMAGES } from "./lib/images.js";
+import { fileChanges } from "./lib/changes.js";
 import { touchDir, forgetDir, seedDirs, cleanDir } from "./lib/recent.js";
 import { lockAvailable, lockToken, unlockToken, lockoutSeconds, validPin, RELOCK_AFTER_MS } from "./lib/lock.js";
 
@@ -505,6 +506,7 @@ function paintEntry(el, e) {
     while (i < parts.length && parts[i].kind === "tool") group.push(parts[i++].tool);
     html += renderToolGroup(group, openIds);
   }
+  if (!e.streaming) html += renderChanges(fileChanges(e.tools), openIds, e.id);
   if (!e.streaming && e.stats && (e.stats.output_tokens || e.stats.input_tokens)) {
     html += `<div class="turn-meta"><span>↑${fmtTokens(e.stats.input_tokens)}</span><span>↓${fmtTokens(e.stats.output_tokens)}</span></div>`;
   }
@@ -557,6 +559,28 @@ function renderToolGroup(tools, openIds) {
     return `<details class="tool tool-group" data-key="${esc(key)}" data-status="done"${open}><summary><span class="t-icon">✓</span><span class="t-name">${tools.length} tool calls</span><span class="t-sum">${esc(names)}</span></summary><div class="tools">${tools.map((t) => renderTool(t, openIds)).join("")}</div></details>`;
   }
   return `<div class="tools">${tools.map((t) => renderTool(t, openIds)).join("")}</div>`;
+}
+
+// "N files changed" card under a finished reply, from its edit/write/patch calls.
+const MAX_DIFF_LINES = 400;
+function renderChanges(files, openIds, key) {
+  if (!files.length) return "";
+  const rel = (p) => (cfg.workingDir && p.startsWith(cfg.workingDir + "/") ? p.slice(cfg.workingDir.length + 1) : shortDir(p));
+  const counts = (a, r) => `<span class="cf-n"><span class="d-add">+${a}</span><span class="d-del">−${r}</span></span>`;
+  const label = (f) => ({ added: "new", deleted: "deleted", written: "rewritten", moved: `→ ${rel(f.to || "")}` })[f.status] || "";
+  const ck = `c-${key}`;
+  const rows = files
+    .map((f) => {
+      const fk = `cf-${key}-${f.path}`;
+      const shown = f.diff.slice(0, MAX_DIFF_LINES);
+      const diff = shown.map((l) => (l.t === "@" ? `<span class="d-sep">⋯</span>` : `<span class="d-${l.t === "+" ? "add" : l.t === "-" ? "del" : "ctx"}">${esc(l.t + l.s)}</span>`)).join("\n");
+      const more = f.diff.length > shown.length ? `\n<span class="d-sep">… ${f.diff.length - shown.length} more lines</span>` : "";
+      return `<details class="cfile" data-key="${esc(fk)}"${openIds.has(fk) ? " open" : ""}><summary><span class="cf-path">${esc(rel(f.path))}</span>${label(f) ? `<span class="cf-tag">${esc(label(f))}</span>` : ""}${counts(f.added, f.removed)}</summary>${f.diff.length ? `<pre class="diff">${diff}${more}</pre>` : ""}</details>`;
+    })
+    .join("");
+  const add = files.reduce((n, f) => n + f.added, 0);
+  const del = files.reduce((n, f) => n + f.removed, 0);
+  return `<details class="changes" data-key="${esc(ck)}"${openIds.has(ck) ? " open" : ""}><summary>${chev()}<span class="cf-title">${files.length} file${files.length === 1 ? "" : "s"} changed</span>${counts(add, del)}</summary><div class="changes-body">${rows}</div></details>`;
 }
 
 function truncate(s, n) {

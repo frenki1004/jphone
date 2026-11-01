@@ -30,7 +30,15 @@ export function demoHistory() {
       {
         role: "tool",
         content: "Success. Updated 1 file.",
-        tool_data: { id: "t3", name: "apply_patch", input: { patch_text: "*** Begin Patch\n*** Update File: src/components/BookingForm.tsx\n", intent: "Guard against double submit" } },
+        tool_data: {
+          id: "t3",
+          name: "apply_patch",
+          input: {
+            patch_text:
+              "*** Begin Patch\n*** Update File: src/components/BookingForm.tsx\n@@ export function BookingForm() {\n   const [saving, setSaving] = useState(false)\n-  const onSubmit = async (data) => {\n-    await api.book(data)\n+  const onSubmit = async (data: Booking) => {\n+    if (saving) return // ignore double taps\n+    setSaving(true)\n+    try {\n+      await api.book(data)\n+    } finally {\n+      setSaving(false)\n+    }\n   }\n@@\n-      <button type=\"submit\">Book</button>\n+      <button type=\"submit\" disabled={saving}>Book</button>\n*** Add File: src/components/BookingForm.test.tsx\n+it(\"ignores a double submit\", async () => {\n+  render(<BookingForm />)\n+  await user.dblClick(screen.getByText(\"Book\"))\n+  expect(api.book).toHaveBeenCalledTimes(1)\n+})\n*** End Patch\n",
+            intent: "Guard against double submit",
+          },
+        },
       },
       { role: "tool", content: " ✓ 24 tests passed (1.8s)", tool_data: { id: "t4", name: "bash", input: { command: "npm test -- BookingForm", intent: "Run form tests" } } },
       {

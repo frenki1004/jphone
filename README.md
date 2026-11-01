@@ -29,6 +29,7 @@ jcode already ships a WebSocket gateway for remote clients, but there is no clie
 | --- | --- |
 | **Live streaming** | Replies render as they are written, with Markdown, tables and syntax-highlighted code blocks with a copy button. |
 | **Tool calls, terminal style** | Compact `✓ bash npm test` rows with a running timer. Tap to see the command and its output. Long finished runs fold into one line. |
+| **Files changed** | Under each finished reply: which files jcode edited, wrote or patched, with +/− counts and a tap-to-open diff, built from the tool calls themselves. |
 | **Stop and steer** | The send button becomes **Stop** while jcode works. Type during a run and the message is queued, then delivered after the current step. |
 | **Sessions** | Swipe in from the left edge for every session on your Mac. Start new ones, switch, rename. |
 | **Photos** | Attach up to 6 photos or screenshots (camera, library or paste). Big photos are scaled to 1568 px JPEG on the phone before sending. |
