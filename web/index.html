@@ -34,6 +34,7 @@
           </div>
 
           <form id="pair-form" class="card pair-card" autocomplete="off" novalidate>
+            <p id="pair-note" class="pair-note" role="status" hidden></p>
             <ol class="steps">
               <li><span class="step-n">1</span> On your Mac, run <code class="copyable" data-copy-text="jcode pair">jcode pair</code></li>
               <li><span class="step-n">2</span> Enter the host and 6-digit code it shows</li>
@@ -65,6 +66,7 @@
               <span class="btn-label">Pair</span>
               <span class="spinner" aria-hidden="true"></span>
             </button>
+            <button id="pair-back" class="btn" type="button" hidden>Back to chat</button>
           </form>
 
           <p class="muted small center">Traffic stays on your Tailscale network. Nothing goes through a third party.</p>

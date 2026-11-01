@@ -226,6 +226,20 @@ kbd {
   border-radius: var(--r-lg);
   padding: 18px;
 }
+.pair-note {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: var(--mint-tint);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+#pair-back {
+  width: 100%;
+  margin-top: 10px;
+}
 .pair-card {
   display: flex;
   flex-direction: column;

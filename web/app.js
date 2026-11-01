@@ -2,6 +2,7 @@
 import { initialState, reduce, friendlyName, sessionCreatedAt, toolSummary, fmtTokens } from "./lib/reducer.js";
 import { Connection, gatewayBase, checkHealth, pair } from "./lib/connection.js";
 import { render as renderMd, esc } from "./lib/markdown.js";
+import { parsePairFragment } from "./lib/pairlink.js";
 
 const $ = (id) => document.getElementById(id);
 const app = $("app");
@@ -138,9 +139,24 @@ const pairErr = $("pair-error");
 const pairBtn = $("pair-submit");
 const pairHealth = $("pair-health");
 
-function initPairing(message) {
+function initPairing(message, link = null) {
   setView("pair");
   pairErr.textContent = message || "";
+  const note = $("pair-note");
+  note.hidden = !link;
+  $("pair-back").hidden = !(link && cfg.token);
+  if (link) {
+    // Prefill, but let the person confirm with one tap: a link could come from
+    // anyone, and pairing points this phone at whatever host it names.
+    pairHost.value = link.host;
+    pairPort.value = link.port;
+    pairCode.value = `${link.code.slice(0, 3)} ${link.code.slice(3)}`;
+    note.textContent = `Pairing link for ${link.host}. Check that this is your Mac, then tap Pair.` + (cfg.token ? " This replaces the current pairing." : "");
+    if (link.port !== "7643") pairPort.closest("details").open = true;
+    probeHost();
+    setTimeout(() => pairBtn.focus(), 50);
+    return;
+  }
   // Default host: whatever served this page (works over Tailscale / LAN), never loopback.
   const servedFrom = location.hostname;
   const loopback = !servedFrom || servedFrom === "localhost" || servedFrom.startsWith("127.") || servedFrom === "::1";
@@ -196,6 +212,7 @@ pairForm.addEventListener("submit", async (e) => {
     cfg = store.save({ host, port: pairPort.value || "7643", base, token: res.token, serverName: res.server_name, serverVersion: res.server_version });
     haptic(15);
     pairCode.value = "";
+    $("pair-note").hidden = true;
     startChat();
     if (!cfg.workingDir) setTimeout(() => openFolderSheet(true), 400);
   } catch (err) {
@@ -205,6 +222,12 @@ pairForm.addEventListener("submit", async (e) => {
     pairBtn.classList.remove("busy");
     pairBtn.disabled = false;
   }
+});
+
+$("pair-back").addEventListener("click", () => {
+  $("pair-note").hidden = true;
+  pairCode.value = "";
+  startChat();
 });
 
 function deviceName() {
@@ -1064,9 +1087,14 @@ if (params.has("demo")) {
     if (params.get("demo") === "drawer") setTimeout(openDrawer, 50);
   });
 } else {
-  if (cfg.token && cfg.base) startChat();
+  // A pairing link (#pair=HOST:PORT:CODE, e.g. from the QR helper). Read it once,
+  // then drop it from the address bar and history so the code does not linger.
+  const link = parsePairFragment(location.hash);
+  if (location.hash) history.replaceState(null, "", location.pathname + location.search);
+  if (link) initPairing("", link);
+  else if (cfg.token && cfg.base) startChat();
   else initPairing();
-  if (cfg.token && !cfg.workingDir) setTimeout(() => openFolderSheet(true), 300);
+  if (!link && cfg.token && !cfg.workingDir) setTimeout(() => openFolderSheet(true), 300);
 }
 
 // Debug hook for automated screenshots/tests.
