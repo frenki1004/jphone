@@ -597,7 +597,9 @@ def main():
     ap.add_argument("--code", help="with --pair: use this pairing code instead of running `jcode pair`")
     ap.add_argument("--gateway", help="jcode gateway HOST:PORT (default: 127.0.0.1:7643, else the Tailscale IP)")
     ap.add_argument("--port", type=int, default=int(os.environ.get("JPHONE_PUSH_PORT", DEFAULT_PORT)), help=f"local API port for serve.py (default {DEFAULT_PORT}, localhost only)")
-    ap.add_argument("--subject", default=os.environ.get("JPHONE_PUSH_SUBJECT", "mailto:jphone@localhost"), help="VAPID contact (mailto: or https: URL)")
+    # Apple rejects a `localhost` contact (403 BadJwtToken), so the default is a
+    # syntactically real address. It is only shown to push services, never mailed.
+    ap.add_argument("--subject", default=os.environ.get("JPHONE_PUSH_SUBJECT", "mailto:jphone-relay@example.com"), help="VAPID contact (mailto: or https: URL)")
     args = ap.parse_args()
     if ec is None:
         sys.exit("The push relay needs the `cryptography` package:\n  python3 -m pip install --user cryptography\n(or ./install-macos.sh push, which sets up its own environment)")
