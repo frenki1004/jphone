@@ -89,7 +89,8 @@ test("lists, ordered start, nested, tasks", () => {
 
 test("tables with alignment", () => {
   const h = render("| a | b |\n|:--|--:|\n| 1 | **2** |");
-  has(h, '<th style="text-align:right">b</th>');
+  has(h, '<th class="al-right">b</th>');
+  if (h.includes("style=")) throw new Error("inline style attribute (blocked by the CSP)");
   has(h, "<td>1</td>");
   has(h, "<strong>2</strong>");
 });

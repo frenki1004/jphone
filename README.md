@@ -167,6 +167,7 @@ Inside the jcode TUI, `/remote status` lists devices and `/remote revoke <device
 **What jPhone shows you**
 
 - **Untrusted output is escaped.** Model and tool output goes through an escape-first renderer, and only `http(s)` and `mailto` links become clickable.
+- **Content-Security-Policy.** The page allows scripts, styles, fonts and workers from its own origin only, images from itself plus `data:`/`blob:` (for photo previews), and network connections to its own origin plus port 7643 on any host (the gateway). No inline scripts, no `eval`, no third-party requests, and it cannot be framed. If you run the gateway on another port, edit the `connect-src` line in `web/index.html`.
 
 **Prompt injection**
 

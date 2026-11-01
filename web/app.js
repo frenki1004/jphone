@@ -910,9 +910,9 @@ function openFolderSheet(required) {
   const guess = cfg.workingDir || "/Users/";
   openSheet(
     "Project folder",
-    `<p class="muted small" style="margin:0">jcode works inside this folder on your Mac. Use the full path.</p>
+    `<p class="muted small flush">jcode works inside this folder on your Mac. Use the full path.</p>
      <label class="field"><span>Absolute path</span><input id="dir-input" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="url" value="${esc(guess)}" placeholder="/Users/you/code/project"/></label>
-     ${recent.length ? `<div class="section-label" style="padding:4px 0 0">Recent</div><ul class="opt-list">${recent.map((d) => `<li><button type="button" data-dir="${esc(d)}" class="${d === cfg.workingDir ? "current" : ""}"><span>${esc(shortDir(d))}</span></button></li>`).join("")}</ul>` : ""}
+     ${recent.length ? `<div class="section-label tight">Recent</div><ul class="opt-list">${recent.map((d) => `<li><button type="button" data-dir="${esc(d)}" class="${d === cfg.workingDir ? "current" : ""}"><span>${esc(shortDir(d))}</span></button></li>`).join("")}</ul>` : ""}
      <p id="dir-err" class="error-text"></p>
      <div class="sheet-actions">${required ? "" : `<button class="btn" value="cancel">Cancel</button>`}<button id="dir-ok" class="btn btn-primary" type="button">Use folder</button></div>`,
     (body) => {
@@ -960,7 +960,7 @@ function openSessionSheet() {
        <li><button type="button" data-sact="folder"><span>Folder</span><span class="muted">${esc(shortDir(cfg.workingDir))}</span></button></li>
        <li><button type="button" data-sact="copy"><span>Copy session id</span><span class="muted">${esc(friendlyName(state.sessionId))}</span></button></li>
      </ul>
-     <p class="muted small" style="margin:0">Tokens this session: ↑${fmtTokens(t.input)} ↓${fmtTokens(t.output)}</p>
+     <p class="muted small flush">Tokens this session: ↑${fmtTokens(t.input)} ↓${fmtTokens(t.output)}</p>
      <div class="sheet-actions"><button class="btn" value="cancel">Close</button><button id="rename-ok" class="btn btn-primary" type="button">Save name</button></div>`,
     (body) => {
       const inp = body.querySelector("#rename-input");
@@ -1029,6 +1029,15 @@ function haptic(pattern) {
 }
 
 // --- lifecycle -------------------------------------------------------------------
+
+// The CSP in index.html only lets the page talk to port 7643. Say so instead of
+// failing silently when someone runs the gateway on another port.
+document.addEventListener("securitypolicyviolation", (e) => {
+  if (!/^connect-src/.test(e.effectiveDirective || e.violatedDirective || "")) return;
+  const msg = `Blocked by jPhone's security policy: ${e.blockedURI}. Only gateway port 7643 is allowed; edit connect-src in web/index.html to use another port.`;
+  if (app.dataset.view === "pair") pairErr.textContent = msg;
+  else showBanner(msg, "error");
+});
 
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && conn) conn.kick();

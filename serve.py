@@ -65,6 +65,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-cache")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
+        # The full CSP is a <meta> tag in index.html, so it also applies behind
+        # other servers. frame-ancestors only works as a header.
+        self.send_header("Content-Security-Policy", "frame-ancestors 'none'")
+        self.send_header("X-Frame-Options", "DENY")
         super().end_headers()
 
     def log_message(self, fmt, *args):

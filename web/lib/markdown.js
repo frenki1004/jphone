@@ -172,7 +172,7 @@ export function render(md, { streaming = false } = {}) {
       i += 2;
       const rows = [];
       while (i < lines.length && lines[i].includes("|") && lines[i].trim()) rows.push(splitRow(lines[i++]));
-      const al = (k) => (aligns[k] ? ` style="text-align:${aligns[k]}"` : "");
+      const al = (k) => (aligns[k] ? ` class="al-${aligns[k]}"` : ""); // a class, not style="": the CSP blocks inline styles
       out.push(
         `<div class="table"><table><thead><tr>${head.map((c, k) => `<th${al(k)}>${inline(c)}</th>`).join("")}</tr></thead><tbody>` +
           rows.map((r) => `<tr>${head.map((_, k) => `<td${al(k)}>${inline(r[k] || "")}</td>`).join("")}</tr>`).join("") +

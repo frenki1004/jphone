@@ -823,6 +823,12 @@ kbd {
 .md tr:last-child td {
   border-bottom: 0;
 }
+.md .al-center {
+  text-align: center;
+}
+.md .al-right {
+  text-align: right;
+}
 
 /* streaming caret */
 .msg-assistant.streaming .md:last-child > :last-child::after,
@@ -1514,6 +1520,12 @@ kbd {
 }
 .sheet .sheet-actions .btn {
   flex: 1;
+}
+.sheet .flush {
+  margin: 0;
+}
+.sheet .section-label.tight {
+  padding: 4px 0 0;
 }
 .sheet .search {
   position: sticky;

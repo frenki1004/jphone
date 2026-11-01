@@ -2,6 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <!-- Strict CSP: own-origin code only. connect-src allows the jcode gateway on port 7643 of any host
+         (http/ws, or https/wss behind tailscale serve). Running the gateway on another port? Change 7643 here. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' http://*:7643 https://*:7643 ws://*:7643 wss://*:7643; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'self'"
+    />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#0f0f14" />
     <meta name="color-scheme" content="dark" />
