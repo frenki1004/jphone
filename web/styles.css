@@ -637,6 +637,20 @@ kbd {
   gap: 8px;
   max-width: 440px;
 }
+.recent-dirs {
+  margin-top: 18px;
+}
+.recent-dirs .section-label {
+  width: 100%;
+  padding-bottom: 2px;
+}
+.chip-dir {
+  font: 13px/1.2 var(--mono);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .chip {
   padding: 9px 14px;
   border-radius: 999px;
@@ -1530,6 +1544,28 @@ kbd {
 .sheet #model-list button,
 .sheet .opt-list button[data-dir] {
   font: 14px/1.3 var(--mono);
+}
+.sheet .dir-list li {
+  display: flex;
+  align-items: center;
+}
+.sheet .dir-list li > button[data-dir] {
+  flex: 1;
+  min-width: 0;
+}
+.sheet .dir-list .x-btn {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  justify-content: center;
+  align-items: center;
+  border-radius: var(--r-sm);
+  color: var(--text-3);
+  font-size: 20px;
+}
+.sheet .dir-list .x-btn:active {
+  background: var(--surface);
 }
 .sheet .opt-list button:disabled {
   opacity: 0.45;

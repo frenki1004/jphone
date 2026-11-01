@@ -32,6 +32,7 @@ jcode already ships a WebSocket gateway for remote clients, but there is no clie
 | **Stop and steer** | The send button becomes **Stop** while jcode works. Type during a run and the message is queued, then delivered after the current step. |
 | **Sessions** | Swipe in from the left edge for every session on your Mac. Start new ones, switch, rename. |
 | **Model picker** | Every model your jcode can use, searchable. |
+| **Recent projects** | The folders you used, most recent first, in the folder picker and as one-tap chips on a new session. |
 | **Survives your pocket** | The phone sleeps, Wi-Fi drops, you switch to cellular. jPhone reconnects, reattaches to the running session and shows the turn finishing. |
 | **Made for thumbs** | Safe areas for the notch and home bar, a composer that follows the on-screen keyboard, 44px tap targets (48px for Stop), haptics where supported. Tablets get a split view. |
 | **jcode's look** | Colors come from jcode's own TUI palette, down to the braille spinner. |

@@ -4,6 +4,7 @@ import { Connection, gatewayBase, checkHealth, pair } from "./lib/connection.js"
 import { render as renderMd, esc } from "./lib/markdown.js";
 import { parsePairFragment } from "./lib/pairlink.js";
 import { turnNotice } from "./lib/notify.js";
+import { touchDir, forgetDir, seedDirs, cleanDir } from "./lib/recent.js";
 import { lockAvailable, lockToken, unlockToken, lockoutSeconds, validPin, RELOCK_AFTER_MS } from "./lib/lock.js";
 
 const $ = (id) => document.getElementById(id);
@@ -62,6 +63,7 @@ function uuid() {
 let cfg = store.load();
 if (!cfg.deviceId) cfg = store.save({ deviceId: uuid() });
 if (!cfg.instanceId) cfg = store.save({ instanceId: `jphone-${cfg.deviceId.slice(0, 8)}` });
+if (!cfg.recentDirs) cfg = store.save({ recentDirs: seedDirs(cfg.sessions, cfg.workingDir) });
 
 // --- state -----------------------------------------------------------------
 
@@ -422,6 +424,7 @@ function renderTranscript() {
     $("empty-dir").textContent = shortDir(cfg.workingDir);
     renderSuggestions();
   }
+  renderRecentDirs(showEmpty);
   if (!cfg.workingDir && entries.length === 0) {
     empty.hidden = false;
     $("empty-dir").textContent = "";
@@ -658,6 +661,7 @@ function submit() {
     dispatch({ type: "local:user", text, queued: true });
   } else {
     const id = conn.send({ type: "message", content: text });
+    cfg = store.save({ recentDirs: touchDir(cfg.recentDirs, cfg.workingDir) });
     dispatch({ type: "local:user", text, requestId: id });
     if (!conn.connected) toast("Offline: will send when reconnected");
   }
@@ -845,6 +849,7 @@ document.addEventListener("click", async (e) => {
   }
   if (act) {
     if (act.dataset.act === "folder") openFolderSheet(!cfg.workingDir);
+    if (act.dataset.act === "use-dir") useFolder(act.dataset.dir);
     if (act.dataset.act === "suggest") {
       input.value = act.dataset.text;
       autosize();
@@ -874,6 +879,15 @@ async function copyText(text) {
     ta.remove();
   }
   haptic(6);
+}
+
+// Other recent folders, one tap away while a session is still empty.
+function renderRecentDirs(show) {
+  const el = $("recent-dirs");
+  const others = show ? (cfg.recentDirs || []).filter((d) => d.dir !== cfg.workingDir).slice(0, 4) : [];
+  const html = others.length ? `<div class="section-label">Recent projects</div>${others.map((d) => `<button class="chip chip-dir" type="button" data-act="use-dir" data-dir="${esc(d.dir)}">${esc(shortDir(d.dir))}</button>`).join("")}` : "";
+  if (el.innerHTML !== html) el.innerHTML = html;
+  el.hidden = !html;
 }
 
 const SUGGESTIONS = ["What's in this project?", "Run the tests and fix failures", "Summarize recent git changes", "Find TODOs worth doing"];
@@ -1051,40 +1065,47 @@ sheet.addEventListener("click", (e) => {
   if (e.target === sheet) sheet.close(); // tap backdrop
 });
 
+// Switch jcode to a project folder. jcode takes it as `working_dir` when a
+// session starts, so a different folder means a new session.
+function useFolder(dir) {
+  const changed = dir !== cfg.workingDir;
+  cfg = store.save({ workingDir: dir, recentDirs: touchDir(cfg.recentDirs, dir) });
+  if (sheet.open) sheet.close();
+  if (!conn) return;
+  conn.workingDir = dir;
+  if (conn.stopped) conn.start();
+  else if (changed) switchTo(null);
+  renderAll();
+  toast(`Working in ${shortDir(dir)}`);
+}
+
 function openFolderSheet(required) {
-  const recent = [...new Set([cfg.workingDir, ...(cfg.sessions || []).map((s) => s.dir)].filter(Boolean))].slice(0, 6);
-  const guess = cfg.workingDir || "/Users/";
+  const recent = (cfg.recentDirs || []).map((d) => d.dir);
+  const guess = cfg.workingDir || (recent[0] ? recent[0].replace(/[^/]+$/, "") : "/Users/");
   openSheet(
     "Project folder",
     `<p class="muted small flush">jcode works inside this folder on your Mac. Use the full path.</p>
      <label class="field"><span>Absolute path</span><input id="dir-input" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="url" value="${esc(guess)}" placeholder="/Users/you/code/project"/></label>
-     ${recent.length ? `<div class="section-label tight">Recent</div><ul class="opt-list">${recent.map((d) => `<li><button type="button" data-dir="${esc(d)}" class="${d === cfg.workingDir ? "current" : ""}"><span>${esc(shortDir(d))}</span></button></li>`).join("")}</ul>` : ""}
+     ${recent.length ? `<div class="section-label tight">Recent</div><ul class="opt-list dir-list">${recent.map((d) => `<li><button type="button" data-dir="${esc(d)}" class="${d === cfg.workingDir ? "current" : ""}"><span>${esc(shortDir(d))}</span></button><button type="button" class="x-btn" data-forget-dir="${esc(d)}" aria-label="Remove ${esc(shortDir(d))} from recent">×</button></li>`).join("")}</ul>` : ""}
      <p id="dir-err" class="error-text"></p>
      <div class="sheet-actions">${required ? "" : `<button class="btn" value="cancel">Cancel</button>`}<button id="dir-ok" class="btn btn-primary" type="button">Use folder</button></div>`,
     (body) => {
       const inp = body.querySelector("#dir-input");
-      const commit = (dir) => {
-        dir = dir.trim().replace(/\/+$/, "") || "/";
-        if (!dir.startsWith("/")) {
-          body.querySelector("#dir-err").textContent = "Use an absolute path, starting with /";
-          return;
-        }
-        const changed = dir !== cfg.workingDir;
-        cfg = store.save({ workingDir: dir });
-        sheet.close();
-        if (!conn) return;
-        conn.workingDir = dir;
-        if (conn.stopped) {
-          conn.start();
-        } else if (changed) {
-          switchTo(null); // a new folder means a new session
-        }
-        renderAll();
-        toast(`Working in ${shortDir(dir)}`);
+      const commit = (raw) => {
+        const dir = cleanDir(raw);
+        if (!dir) return void (body.querySelector("#dir-err").textContent = "Use an absolute path, starting with /");
+        useFolder(dir);
       };
       body.querySelector("#dir-ok").onclick = () => commit(inp.value);
       inp.addEventListener("keydown", (e) => e.key === "Enter" && (e.preventDefault(), commit(inp.value)));
       body.querySelectorAll("[data-dir]").forEach((b) => (b.onclick = () => commit(b.dataset.dir)));
+      body.querySelectorAll("[data-forget-dir]").forEach(
+        (b) =>
+          (b.onclick = () => {
+            cfg = store.save({ recentDirs: forgetDir(cfg.recentDirs, b.dataset.forgetDir) });
+            b.closest("li").remove();
+          })
+      );
       setTimeout(() => {
         inp.focus();
         inp.setSelectionRange(inp.value.length, inp.value.length);
