@@ -321,6 +321,17 @@ def is_loopback_or_unknown(host):
     return not host or host.startswith("127.") or host in ("localhost", "::1", "0.0.0.0", "::", "<this-machine>")
 
 
+def normalize_gateway(value, default_port="7643"):
+    """HOST, HOST:PORT or [IPv6]:PORT -> HOST:PORT (same rules as web/lib/pairlink.js), else None."""
+    m = re.fullmatch(r"(\[[0-9a-fA-F:.]+\]|[A-Za-z0-9.-]+)(?::(\d{1,5}))?", value.strip())
+    if not m:
+        return None
+    port = int(m.group(2) or default_port)
+    if not 1 <= port <= 65535:
+        return None
+    return f"{m.group(1)}:{port}"
+
+
 def main():
     ap = argparse.ArgumentParser(description="Print a QR code that pairs jPhone with this Mac's jcode.")
     ap.add_argument("--https", action="store_true", help="jPhone and gateway are behind tailscale serve (https://<magicdns>)")
@@ -342,7 +353,9 @@ def main():
     ts_ip = (tailscale("ip", "-4").strip().splitlines() or [None])[0]
 
     if args.gateway:
-        gw = args.gateway
+        gw = normalize_gateway(args.gateway)
+        if not gw:
+            sys.exit(f"Invalid --gateway {args.gateway!r}. Use HOST, HOST:PORT or [IPv6]:PORT.")
     elif args.https:
         if not dns:
             sys.exit("Could not find this machine's Tailscale name. Pass --gateway NAME.ts.net:7643.")
