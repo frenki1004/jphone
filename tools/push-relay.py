@@ -547,7 +547,8 @@ def pair_relay(store, gw_host, gw_port, code=None):
         exe = shutil.which("jcode")
         if not exe:
             sys.exit("jcode is not on PATH. Run `jcode pair` and pass --code.")
-        out = ANSI.sub("", subprocess.run([exe, "pair"], capture_output=True, text=True, timeout=30).stdout)
+        p = subprocess.run([exe, "pair"], capture_output=True, text=True, timeout=30)
+        out = ANSI.sub("", p.stdout + p.stderr)  # jcode prints the code on either stream
         m = re.search(r"Pairing code:\s*(\d{3})\s?(\d{3})", out)
         if not m:
             sys.exit("Could not read a pairing code from `jcode pair`:\n" + out)
