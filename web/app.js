@@ -4,6 +4,7 @@ import { Connection, gatewayBase, checkHealth, pair } from "./lib/connection.js"
 import { render as renderMd, esc } from "./lib/markdown.js";
 import { parsePairFragment } from "./lib/pairlink.js";
 import { turnNotice } from "./lib/notify.js";
+import { prepareImage, MAX_IMAGES } from "./lib/images.js";
 import { touchDir, forgetDir, seedDirs, cleanDir } from "./lib/recent.js";
 import { lockAvailable, lockToken, unlockToken, lockoutSeconds, validPin, RELOCK_AFTER_MS } from "./lib/lock.js";
 
@@ -468,7 +469,8 @@ function paintEntry(el, e) {
   if (e.role === "user") {
     el.className = `msg msg-user${e.queued ? " queued" : ""}${e.dropped ? " dropped" : ""}${e.peer ? " peer" : ""}`;
     const meta = e.queued ? "queued · sends after current step" : e.dropped ? "not sent · tap to edit" : e.peer ? "from another device" : "";
-    el.innerHTML = esc(e.text) + (meta ? `<span class="meta">${meta}</span>` : "");
+    const imgs = e.images && e.images.length ? `<div class="msg-images">${e.images.map((src) => `<img src="${esc(src)}" alt="Attached photo" />`).join("")}</div>` : "";
+    el.innerHTML = imgs + esc(e.text) + (meta ? `<span class="meta">${meta}</span>` : "");
     if (e.dropped) el.dataset.retry = e.text;
     else delete el.dataset.retry;
     return;
@@ -613,7 +615,7 @@ function renderStatusTime() {
 }
 
 function composerMode() {
-  const hasText = input.value.trim().length > 0;
+  const hasText = input.value.trim().length > 0 || attachments.length > 0;
   if (state.processing) return hasText ? "queue" : "stop";
   return "send";
 }
@@ -622,7 +624,7 @@ function renderComposer() {
   const mode = composerMode();
   sendBtn.dataset.mode = mode;
   sendBtn.setAttribute("aria-label", mode === "stop" ? "Stop" : mode === "queue" ? "Queue message" : "Send");
-  sendBtn.disabled = mode === "send" && (!input.value.trim() || !cfg.workingDir);
+  sendBtn.disabled = mode === "send" && ((!input.value.trim() && !attachments.length) || !cfg.workingDir);
   input.placeholder = state.processing ? "Add a follow-up…" : cfg.workingDir ? "Message jcode" : "Choose a project folder first";
 }
 
@@ -654,17 +656,24 @@ $("composer").addEventListener("submit", (e) => {
 function submit() {
   const mode = composerMode();
   if (mode === "stop") return stop();
-  const text = input.value.trim();
-  if (!text || !conn || !cfg.workingDir) return;
+  const typed = input.value.trim();
+  if ((!typed && !attachments.length) || !conn || !cfg.workingDir) return;
+  if (attachments.some((a) => a.pending)) return void toast("Still preparing the photo…");
+  // jcode puts images in front of the text; a photo alone still needs a little text.
+  const text = typed || (attachments.length > 1 ? "See the attached images." : "See the attached image.");
+  const extra = attachments.length ? { images: attachments.map((a) => [a.mediaType, a.data]) } : {};
+  const previews = attachments.map((a) => a.previewUrl);
   if (mode === "queue") {
-    conn.send({ type: "soft_interrupt", content: text, urgent: false });
-    dispatch({ type: "local:user", text, queued: true });
+    conn.send({ type: "soft_interrupt", content: text, urgent: false, ...extra });
+    dispatch({ type: "local:user", text, images: previews, queued: true });
   } else {
-    const id = conn.send({ type: "message", content: text });
+    const id = conn.send({ type: "message", content: text, ...extra });
     cfg = store.save({ recentDirs: touchDir(cfg.recentDirs, cfg.workingDir) });
-    dispatch({ type: "local:user", text, requestId: id });
+    dispatch({ type: "local:user", text, images: previews, requestId: id });
     if (!conn.connected) toast("Offline: will send when reconnected");
   }
+  attachments = []; // previews stay alive: the sent bubble shows them
+  renderAttachments();
   input.value = "";
   saveDraft();
   autosize();
@@ -673,6 +682,60 @@ function submit() {
   haptic(8);
   renderComposer();
 }
+
+// --- photo attachments --------------------------------------------------------
+
+let attachments = []; // { id, pending?, mediaType, data, previewUrl }
+let attSeq = 0;
+const fileInput = $("file");
+
+$("attach").addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", () => {
+  addImages([...fileInput.files]);
+  fileInput.value = "";
+});
+input.addEventListener("paste", (e) => {
+  const files = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith("image/"));
+  if (files.length) {
+    e.preventDefault();
+    addImages(files);
+  }
+});
+
+async function addImages(files) {
+  const room = MAX_IMAGES - attachments.length;
+  if (files.length > room) toast(`Up to ${MAX_IMAGES} photos per message`);
+  for (const file of files.slice(0, Math.max(0, room))) {
+    const a = { id: ++attSeq, pending: true };
+    attachments.push(a);
+    renderAttachments();
+    try {
+      Object.assign(a, await prepareImage(file), { pending: false });
+    } catch {
+      attachments = attachments.filter((x) => x !== a);
+      toast("Couldn't read that image");
+    }
+    renderAttachments();
+  }
+}
+
+function renderAttachments() {
+  const el = $("attachments");
+  el.hidden = !attachments.length;
+  el.innerHTML = attachments
+    .map((a) => `<div class="att${a.pending ? " pending" : ""}">${a.previewUrl ? `<img src="${esc(a.previewUrl)}" alt="Photo to send" />` : `<span class="braille" data-spin>${FRAMES[tick]}</span>`}<button type="button" class="att-x" data-att-remove="${a.id}" aria-label="Remove photo">×</button></div>`)
+    .join("");
+  renderComposer();
+}
+
+$("attachments").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-att-remove]");
+  if (!b) return;
+  const a = attachments.find((x) => String(x.id) === b.dataset.attRemove);
+  if (a && a.previewUrl) URL.revokeObjectURL(a.previewUrl);
+  attachments = attachments.filter((x) => x !== a);
+  renderAttachments();
+});
 
 function stop() {
   if (!conn) return;

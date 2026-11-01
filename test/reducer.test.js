@@ -351,5 +351,12 @@ test("helpers", () => {
   eq(toolSummary({ name: "apply_patch", input: { patch_text: "*** Begin Patch\n*** Update File: a/b.rs\n" } }), "a/b.rs");
 });
 
+test("a sent photo is kept on the user entry for its preview", () => {
+  const s = run([{ type: "local:user", text: "what is this?", images: ["blob:x/1"], requestId: 3 }]);
+  eq(s.entries[0].images, ["blob:x/1"]);
+  const t = run([{ type: "local:user", text: "plain", requestId: 4 }]);
+  eq("images" in t.entries[0], false, "no empty images array");
+});
+
 print(`\n${passed} passed, ${failed} failed`);
 if (failed) throw new Error("tests failed");

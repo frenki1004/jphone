@@ -186,7 +186,9 @@ export function reduce(s, ev) {
       if (ev.phase !== "connected") s.status = ev.phase === "failed" ? "" : s.status;
       return s;
     case "local:user": {
-      s.entries.push({ id: lid(), role: "user", text: ev.text, queued: !!ev.queued, v: 0 });
+      const entry = { id: lid(), role: "user", text: ev.text, queued: !!ev.queued, v: 0 };
+      if (ev.images && ev.images.length) entry.images = ev.images; // local preview URLs of attached photos
+      s.entries.push(entry);
       if (!ev.queued) {
         s.activeRequestId = ev.requestId ?? null;
         s.processing = true;
