@@ -142,10 +142,12 @@ kbd {
 }
 
 .pair,
+.lock,
 .chat {
   display: none;
 }
-.app[data-view="pair"] .pair {
+.app[data-view="pair"] .pair,
+.app[data-view="lock"] .lock {
   display: flex;
 }
 .app[data-view="chat"] .chat {
@@ -194,7 +196,8 @@ kbd {
 
 /* --- pairing ---------------------------------------------------------------- */
 
-.pair {
+.pair,
+.lock {
   flex: 1;
   overflow-y: auto;
   padding: calc(var(--safe-t) + 40px) calc(20px + var(--safe-r)) calc(var(--safe-b) + 24px) calc(20px + var(--safe-l));
@@ -235,6 +238,14 @@ kbd {
   font-size: 14px;
   line-height: 1.4;
   overflow-wrap: anywhere;
+}
+.link-btn {
+  color: var(--text-3);
+  font-size: 14px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 8px;
+  align-self: center;
 }
 #pair-back {
   width: 100%;

@@ -51,7 +51,7 @@ bind_addr = "100.101.102.103"   # your Mac's Tailscale IP: `tailscale ip -4`
 
 Restart jcode afterwards. Check it from the Mac with `curl http://100.101.102.103:7643/health` (your IP).
 
-> **Why not `0.0.0.0`?** jcode's own default is `0.0.0.0`, which listens on *every* network your Mac is on: home Wi-Fi, a café, a hotel, an office LAN. Anyone who can reach the port can try pairing codes, and a paired device can run commands on your Mac. Binding to the Tailscale IP means only devices on your tailnet can even open a connection. The catch: jcode must start after Tailscale is up, or the gateway fails to bind (restart jcode if that happens). If you use the [HTTPS setup](#optional-https) instead, bind to `127.0.0.1`.
+> **Why not `0.0.0.0`?** jcode's own default is `0.0.0.0`, which listens on *every* network your Mac is on: home Wi-Fi, a café, a hotel, an office LAN. Anyone who can reach the port can try pairing codes (the gateway does not rate-limit `/pair`, and a code is only 6 digits), and a paired device can run commands on your Mac. Binding to the Tailscale IP means only devices on your tailnet can even open a connection. The catch: jcode must start after Tailscale is up, or the gateway fails to bind (restart jcode if that happens). If you use the [HTTPS setup](#optional-https) instead, bind to `127.0.0.1`.
 
 **2. Run jPhone** on the same Mac:
 
@@ -158,13 +158,14 @@ jPhone is a remote control for an agent that can run commands on your Mac. Treat
 **Network**
 
 - **Keep everything on your tailnet.** `serve.py` binds to your Tailscale IP and localhost, never `0.0.0.0`. Bind jcode's gateway to the Tailscale IP too (see [Quick start](#quick-start)), or to `127.0.0.1` behind `tailscale serve`. Do not expose port 7643 to the internet or put it behind a public reverse proxy.
-- **Use HTTPS when you can** ([setup](#optional-https)). Over plain `http://` the traffic is still encrypted by Tailscale's WireGuard tunnel, but the browser treats the page as insecure: no notifications, no service worker, no offline loading.
+- **Use HTTPS when you can** ([setup](#optional-https)). Over plain `http://` the traffic is still encrypted by Tailscale's WireGuard tunnel, but the browser treats the page as insecure: no app lock, no notifications, no service worker, no offline loading.
 - **Tailscale ACLs** can limit which of your devices may reach the Mac's ports 8765 and 7643.
 
 **Pairing and tokens**
 
 - A pairing code is single use and expires after 5 minutes. A [pairing link or QR code](#pair-with-a-qr-code) carries the same code, so treat it like the code: do not paste it into chats or screenshots.
 - Pairing gives the phone a device token, stored in the browser's `localStorage` (jcode keeps only a hash). The token travels in the WebSocket URL (`/ws?token=…`) because browsers cannot set an `Authorization` header on a WebSocket. jcode logs that it saw query-token auth, but not the token.
+- **App lock** (Settings → App lock, HTTPS only): set a 4–12 digit PIN and the token is stored encrypted with a key derived from it (PBKDF2-SHA-256 + AES-GCM, WebCrypto). jPhone asks for the PIN on launch and after 5 minutes in the background. It protects against someone picking up your unlocked phone. It is not strong protection against someone who can copy the browser's storage, because a short PIN can be brute-forced offline. Five wrong PINs start a growing wait (30 s, doubling to 15 min). Forgot the PIN? *Forget this Mac* and pair again. If the phone is lost, revoke it.
 
 **Revoking a device**
 

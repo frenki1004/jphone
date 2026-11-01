@@ -1,7 +1,7 @@
 // jPhone service worker: offline app shell. Only active over https
 // (browsers do not register service workers on plain http, except localhost).
 const VERSION = "jphone-v1";
-const SHELL = ["./", "index.html", "styles.css", "app.js", "lib/reducer.js", "lib/connection.js", "lib/markdown.js", "lib/pairlink.js", "lib/notify.js", "manifest.webmanifest", "icons/icon.svg", "icons/icon-192.png"];
+const SHELL = ["./", "index.html", "styles.css", "app.js", "lib/reducer.js", "lib/connection.js", "lib/markdown.js", "lib/pairlink.js", "lib/notify.js", "lib/lock.js", "manifest.webmanifest", "icons/icon.svg", "icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

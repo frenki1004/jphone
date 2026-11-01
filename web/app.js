@@ -4,6 +4,7 @@ import { Connection, gatewayBase, checkHealth, pair } from "./lib/connection.js"
 import { render as renderMd, esc } from "./lib/markdown.js";
 import { parsePairFragment } from "./lib/pairlink.js";
 import { turnNotice } from "./lib/notify.js";
+import { lockAvailable, lockToken, unlockToken, lockoutSeconds, validPin, RELOCK_AFTER_MS } from "./lib/lock.js";
 
 const $ = (id) => document.getElementById(id);
 const app = $("app");
@@ -30,7 +31,8 @@ const store = {
     memo = { ...this.load(), ...patch };
     if (persist) {
       try {
-        localStorage.setItem(STORE_KEY, JSON.stringify(memo));
+        // With an app lock, the token only lives in memory; storage has it encrypted.
+        localStorage.setItem(STORE_KEY, JSON.stringify(memo.lock ? { ...memo, token: undefined } : memo));
       } catch {
         /* private mode / quota: keep working in memory */
       }
@@ -211,7 +213,9 @@ pairForm.addEventListener("submit", async (e) => {
     const h = await checkHealth(base);
     if (!h.ok) throw new Error(`Can't reach jcode at ${host} (${h.error}). Is Tailscale on and the gateway enabled?`);
     const res = await pair(base, code, cfg.deviceId, deviceName());
-    cfg = store.save({ host, port: pairPort.value || "7643", base, token: res.token, serverName: res.server_name, serverVersion: res.server_version });
+    const hadLock = !!cfg.lock; // a new token cannot reuse the old PIN's encryption
+    cfg = store.save({ host, port: pairPort.value || "7643", base, token: res.token, serverName: res.server_name, serverVersion: res.server_version, lock: null, lockFails: 0, lockUntil: 0 });
+    if (hadLock) setTimeout(() => toast("App lock is off after re-pairing. Set a PIN in Settings."), 600);
     haptic(15);
     pairCode.value = "";
     $("pair-note").hidden = true;
@@ -236,6 +240,92 @@ function deviceName() {
   const ua = navigator.userAgent;
   const kind = /iPhone/.test(ua) ? "iPhone" : /iPad/.test(ua) ? "iPad" : /Android/.test(ua) ? "Android" : "browser";
   return `jPhone (${kind})`;
+}
+
+// --- app lock -------------------------------------------------------------------
+
+const lockForm = $("lock-form");
+const lockPin = $("lock-pin");
+const lockErr = $("lock-error");
+
+function showLock() {
+  setView("lock");
+  lockPin.value = "";
+  const wait = Math.ceil(((cfg.lockUntil || 0) - Date.now()) / 1000);
+  lockErr.textContent = wait > 0 ? `Too many wrong PINs. Try again in ${wait}s.` : "";
+  setTimeout(() => lockPin.focus(), 50);
+}
+
+lockForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const wait = Math.ceil(((cfg.lockUntil || 0) - Date.now()) / 1000);
+  if (wait > 0) return void (lockErr.textContent = `Too many wrong PINs. Try again in ${wait}s.`);
+  const btn = $("lock-submit");
+  btn.classList.add("busy");
+  btn.disabled = true;
+  try {
+    const token = await unlockToken(cfg.lock, lockPin.value);
+    cfg = store.save({ token, lockFails: 0, lockUntil: 0 });
+    lockPin.value = "";
+    startChat();
+    if (!cfg.workingDir) setTimeout(() => openFolderSheet(true), 300);
+  } catch {
+    const fails = (cfg.lockFails || 0) + 1;
+    const secs = lockoutSeconds(fails);
+    cfg = store.save({ lockFails: fails, lockUntil: secs ? Date.now() + secs * 1000 : 0 });
+    lockErr.textContent = secs ? `Wrong PIN. Try again in ${secs}s.` : "Wrong PIN.";
+    lockPin.value = "";
+    haptic([10, 40, 10]);
+  } finally {
+    btn.classList.remove("busy");
+    btn.disabled = false;
+  }
+});
+
+$("lock-forget").addEventListener("click", () => {
+  if (confirm("Forget this Mac? This removes the pairing from this phone. You'll need a new code from `jcode pair`.")) forget();
+});
+
+// Lock now: drop the token and everything on screen.
+function relock() {
+  if (!cfg.lock) return;
+  if (conn) conn.stop();
+  conn = null;
+  cfg = store.save({ token: undefined });
+  state = initialState();
+  nodes.clear();
+  transcriptEl.innerHTML = "";
+  if (sheet.open) sheet.close();
+  closeDrawer();
+  hideBanner();
+  showLock();
+}
+
+let hiddenAt = 0;
+
+function openPinSheet() {
+  openSheet(
+    cfg.lock ? "Change PIN" : "Set a PIN",
+    `<p class="muted small flush">jPhone will ask for it when it starts and after ${RELOCK_AFTER_MS / 60000} minutes in the background. Your device token is stored encrypted with it.</p>
+     <label class="field"><span>New PIN (4–12 digits)</span><input id="pin1" type="password" inputmode="numeric" autocomplete="off" maxlength="12"/></label>
+     <label class="field"><span>Repeat PIN</span><input id="pin2" type="password" inputmode="numeric" autocomplete="off" maxlength="12"/></label>
+     <p id="pin-err" class="error-text"></p>
+     <div class="sheet-actions"><button class="btn" value="cancel">Cancel</button><button id="pin-ok" class="btn btn-primary" type="button">Save PIN</button></div>`,
+    (body) => {
+      const [p1, p2, err] = ["#pin1", "#pin2", "#pin-err"].map((q) => body.querySelector(q));
+      body.querySelector("#pin-ok").onclick = async () => {
+        if (!validPin(p1.value)) return void (err.textContent = "Use 4 to 12 digits.");
+        if (p1.value !== p2.value) return void (err.textContent = "The two PINs differ.");
+        if (!cfg.token) return void (err.textContent = "Pair first.");
+        err.textContent = "";
+        const lock = await lockToken(p1.value, cfg.token);
+        cfg = store.save({ lock, lockFails: 0, lockUntil: 0 });
+        sheet.close();
+        toast("App lock is on");
+      };
+      setTimeout(() => p1.focus(), 60);
+    }
+  );
 }
 
 // --- chat startup ------------------------------------------------------------
@@ -1062,6 +1152,19 @@ function openSettingsSheet() {
        ${notifyOn() ? `<li><button type="button" data-set="test"><span>Send a test notification</span><span></span></button></li>` : ""}
      </ul>
      <p class="muted small flush">${why ? esc(why) : "Works while jPhone is open or recently in the background. Phones suspend background pages after a while, and jcode has no push service, so a closed app is not notified."}</p>
+     <div class="section-label tight">App lock</div>
+     <ul class="opt-list">
+       ${
+         !lockAvailable()
+           ? `<li><button type="button" disabled><span>PIN lock</span><span class="muted">needs HTTPS</span></button></li>`
+           : cfg.lock
+             ? `<li><button type="button" data-set="lock-now"><span>Lock now</span><span></span></button></li>
+                <li><button type="button" data-set="pin"><span>Change PIN</span><span></span></button></li>
+                <li><button type="button" data-set="lock-off"><span>Turn off app lock</span><span class="muted">On</span></button></li>`
+             : `<li><button type="button" data-set="pin"><span>Set a PIN</span><span class="muted">Off</span></button></li>`
+       }
+     </ul>
+     <p class="muted small flush">Asks for the PIN when jPhone starts and after ${RELOCK_AFTER_MS / 60000} minutes away. If the phone is lost, revoke it on the Mac: <code>jcode pair --revoke</code>.</p>
      <div class="sheet-actions"><button class="btn" value="cancel">Done</button></div>`,
     (body) => {
       body.querySelectorAll("[data-set]").forEach(
@@ -1077,6 +1180,13 @@ function openSettingsSheet() {
               }
             }
             if (a === "hide") cfg = store.save({ notifyHide: !notifyHide() });
+            if (a === "pin") return openPinSheet();
+            if (a === "lock-now") return relock();
+            if (a === "lock-off") {
+              if (!confirm("Turn off the app lock? The device token will be stored unencrypted on this phone again.")) return;
+              cfg = store.save({ lock: null });
+              toast("App lock is off");
+            }
             if (a === "test") showNotification({ title: "jcode finished", body: notifyHide() ? "Your turn. Open jPhone to see the reply." : "This is what a finished turn looks like.", tag: "jphone-test" });
             openSettingsSheet(); // re-render in place
           })
@@ -1136,8 +1246,11 @@ document.addEventListener("securitypolicyviolation", (e) => {
 });
 
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) clearAttention();
-  if (!document.hidden && conn) conn.kick();
+  if (document.hidden) return void (hiddenAt = Date.now());
+  clearAttention();
+  if (cfg.lock && cfg.token && hiddenAt && Date.now() - hiddenAt > RELOCK_AFTER_MS) relock();
+  hiddenAt = 0;
+  if (conn) conn.kick();
 });
 window.addEventListener("online", () => conn && conn.kick());
 window.addEventListener("pageshow", (e) => e.persisted && conn && conn.kick());
@@ -1166,6 +1279,7 @@ if (params.has("demo")) {
   const link = parsePairFragment(location.hash);
   if (location.hash) history.replaceState(null, "", location.pathname + location.search);
   if (link) initPairing("", link);
+  else if (cfg.lock && cfg.base) showLock();
   else if (cfg.token && cfg.base) startChat();
   else initPairing();
   if (!link && cfg.token && !cfg.workingDir) setTimeout(() => openFolderSheet(true), 300);

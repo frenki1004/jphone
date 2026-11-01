@@ -73,6 +73,29 @@
         </div>
       </section>
 
+      <!-- App lock ------------------------------------------------------- -->
+      <section class="lock" aria-labelledby="lock-title">
+        <div class="pair-inner">
+          <div class="brand">
+            <div class="logo" aria-hidden="true"><span class="logo-j">j</span><span class="logo-cursor"></span></div>
+            <h1 id="lock-title">jPhone is locked</h1>
+            <p class="muted">Enter your PIN to continue.</p>
+          </div>
+          <form id="lock-form" class="card pair-card" autocomplete="off" novalidate>
+            <label class="field">
+              <span>PIN</span>
+              <input id="lock-pin" class="code-input" type="password" inputmode="numeric" autocomplete="off" maxlength="12" required />
+            </label>
+            <p id="lock-error" class="error-text" role="alert"></p>
+            <button id="lock-submit" class="btn btn-primary" type="submit">
+              <span class="btn-label">Unlock</span>
+              <span class="spinner" aria-hidden="true"></span>
+            </button>
+          </form>
+          <button id="lock-forget" class="link-btn" type="button">Forgot the PIN? Forget this Mac and pair again</button>
+        </div>
+      </section>
+
       <!-- Chat ----------------------------------------------------------- -->
       <section class="chat" aria-label="Chat">
         <header class="topbar">
