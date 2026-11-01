@@ -31,7 +31,8 @@ if [ "${1:-}" = "push" ]; then
     "$PY" -m venv "$VENV"
   fi
   "$VENV/bin/python" -m pip install --quiet --upgrade cryptography
-  if ! "$VENV/bin/python" -c 'import json,os,sys; sys.exit(0 if json.load(open(os.path.expanduser("~/.config/jphone/push.json"))).get("relay_token") else 1)' 2>/dev/null; then
+  # Pair when there is no saved pairing, or when it was revoked in jcode.
+  if ! "$VENV/bin/python" "$DIR/tools/push-relay.py" --check >/dev/null 2>&1; then
     echo "Pairing the relay with jcode..."
     "$VENV/bin/python" "$DIR/tools/push-relay.py" --pair
   fi

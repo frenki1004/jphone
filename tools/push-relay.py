@@ -433,7 +433,7 @@ class Relay:
                     if time.time() > w["until"] and not tracker.active:
                         break
             except PermissionError as e:
-                log(f"relay token rejected ({e}). Run: tools/push-relay.py --pair")
+                log(f"relay token rejected ({e}). Re-pair: ./install-macos.sh push")
                 time.sleep(60)
             except (OSError, EOFError, ConnectionError) as e:
                 log(f"{tracker.label}: {e or type(e).__name__}, reconnecting in {backoff}s")
@@ -595,6 +595,7 @@ def main():
     ap = argparse.ArgumentParser(description="Web Push relay for jPhone (optional).")
     ap.add_argument("--pair", action="store_true", help="pair the relay with jcode (runs `jcode pair`), then exit")
     ap.add_argument("--code", help="with --pair: use this pairing code instead of running `jcode pair`")
+    ap.add_argument("--check", action="store_true", help="exit 0 if the saved relay pairing still works, 2 if it is missing or revoked")
     ap.add_argument("--gateway", help="jcode gateway HOST:PORT (default: 127.0.0.1:7643, else the Tailscale IP)")
     ap.add_argument("--port", type=int, default=int(os.environ.get("JPHONE_PUSH_PORT", DEFAULT_PORT)), help=f"local API port for serve.py (default {DEFAULT_PORT}, localhost only)")
     # Apple rejects a `localhost` contact (403 BadJwtToken), so the default is a
@@ -608,6 +609,19 @@ def main():
     gw_host, gw_port = find_gateway(args.gateway)
     if args.pair:
         return pair_relay(store, gw_host, gw_port, args.code)
+    if args.check:
+        tok = store.data.get("relay_token")
+        try:
+            if tok:
+                GatewaySocket(gw_host, gw_port, tok).close()
+                print("relay pairing ok")
+                return
+        except PermissionError:
+            pass
+        except OSError as e:
+            sys.exit(f"jcode gateway unreachable at {gw_host}:{gw_port}: {e}")
+        print("relay is not paired (or was revoked)")
+        sys.exit(2)
     if not store.data.get("relay_token"):
         sys.exit("The relay is not paired with jcode yet. Run: tools/push-relay.py --pair")
 
