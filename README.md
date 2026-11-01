@@ -33,8 +33,10 @@ jcode already ships a WebSocket gateway for remote clients, but there is no clie
 | **Stop and steer** | The send button becomes **Stop** while jcode works. Type during a run and the message is queued, then delivered after the current step. |
 | **Sessions** | Swipe in from the left edge for every session on your Mac. Start new ones, switch, rename. |
 | **Photos** | Attach up to 6 photos or screenshots (camera, library or paste). Big photos are scaled to 1568 px JPEG on the phone before sending. |
+| **Notifications** | Optional: a notification when a turn finishes or fails while jPhone is in the background, with message content hidden by default ([limits](#status-and-limitations)). |
 | **Model picker** | Every model your jcode can use, searchable. |
 | **Recent projects** | The folders you used, most recent first, in the folder picker and as one-tap chips on a new session. |
+| **Quick, locked pairing** | Pair by scanning a QR code from `tools/pair-qr.py`. Optional PIN lock that keeps the device token encrypted ([security](#security)). |
 | **Survives your pocket** | The phone sleeps, Wi-Fi drops, you switch to cellular. jPhone reconnects, reattaches to the running session and shows the turn finishing. |
 | **Made for thumbs** | Safe areas for the notch and home bar, a composer that follows the on-screen keyboard, 44px tap targets (48px for Stop), haptics where supported. Tablets get a split view. |
 | **jcode's look** | Colors come from jcode's own TUI palette, down to the braille spinner. |
@@ -149,7 +151,7 @@ flowchart LR
 
 - **`serve.py`** only hands out static files. It never sees your messages or token. It binds to your Tailscale IP and localhost, never `0.0.0.0`.
 - **The browser talks to jcode's gateway directly.** Pairing exchanges the code for a device token (stored hashed on the Mac). The WebSocket carries the same newline-delimited JSON protocol jcode's own clients use.
-- **The app is plain ES modules**: `web/lib/reducer.js` (pure state machine: events → transcript), `connection.js` (pairing, reconnect with backoff, session reattach), `markdown.js` (escape-first Markdown and a small highlighter). About 2k lines of JavaScript, no framework.
+- **The app is plain ES modules**: `web/lib/reducer.js` (pure state machine: events → transcript), `connection.js` (pairing, reconnect with backoff, session reattach), `markdown.js` (escape-first Markdown and a small highlighter), plus small pure modules for notifications, the app lock, photos, recent folders, pairing links and the files-changed card. About 3k lines of JavaScript, no framework.
 
 <details>
 <summary><b>Protocol notes</b> (things learned the hard way)</summary>
@@ -210,7 +212,7 @@ The agent reads files, web pages, issue text and command output. Any of it can c
 ## Development
 
 ```sh
-./test/run.sh          # 40 tests, runs on macOS's built-in JavaScriptCore (or Node)
+./test/run.sh          # 70+ tests, runs on macOS's built-in JavaScriptCore (or Node)
 tools/screenshots.sh   # regenerate docs/img from the demo (macOS, uses WebKit)
 ```
 
@@ -218,15 +220,16 @@ tools/screenshots.sh   # regenerate docs/img from the demo (macOS, uses WebKit)
 web/            the app (index.html, styles.css, app.js, lib/, icons/, sw.js)
 test/           headless tests, including replays of real gateway sessions
 spike/          protocol spike client and the recorded fixtures the tests use
-tools/          pair-qr.py, WebKit screenshot harness, README image composer
+tools/          pair-qr.py, https-setup.sh, WebKit screenshot harness, README image composer
 serve.py        static server (stdlib only)
 ```
 
-The tests replay event sequences recorded from a live jcode gateway, covering streaming, tool calls, stop, queued follow-ups, reconnecting mid-tool, renames and errors.
+The tests replay event sequences recorded from a live jcode gateway, covering streaming, tool calls, stop, queued follow-ups, reconnecting mid-tool, renames and errors. The newer pure modules (notifications, lock, photos, files changed, pairing links, recent folders) have their own tests; the lock's crypto tests need WebCrypto and run under Node only.
 
 ## Status and limitations
 
 - **Tested** end-to-end against a real jcode gateway (v0.99) in WebKit, the engine behind iPhone Safari, at 393×852, 320×568 and 1024×768. **Not yet tested on a physical iPhone or Android phone.** Reports welcome.
+- **Newer features** (pairing links and QR, app lock, notifications, photos, recent projects, files changed, the CSP) were tested in headless Chromium at 390×844 against a stub gateway that speaks the same protocol, not yet against a real jcode or in WebKit.
 - **Photos show only in the session you sent them from.** After a reload, jcode's history still has them, but jPhone does not render history images yet.
 - **Notifications only while the page is alive.** Settings → *Notify when jcode finishes* (HTTPS only; on iPhone, from the Home Screen app) shows a notification when a turn ends or fails while jPhone is in the background. Phones suspend background pages after a while (iOS within seconds to minutes), and a closed app gets nothing. Real Web Push would need jcode to send pushes through a push service, which it does not do (pairing accepts an `apns_token` for a native iOS app, but nothing in jcode sends to it, and a web page could not receive APNs anyway). There is also no separate "needs input" signal in the gateway protocol: jcode is waiting for you exactly when a turn ends, so that is when jPhone notifies.
 - **No interactive stdin**, see protocol notes.
