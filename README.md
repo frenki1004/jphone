@@ -77,6 +77,19 @@ Type the 6-digit code. Pairing happens as soon as you enter the last digit. Pick
 
 > **Tip:** In Safari, tap Share → **Add to Home Screen** for a full-screen app icon.
 
+### Pair with a QR code
+
+Instead of typing the host and code, run this on the Mac:
+
+```sh
+tools/pair-qr.py            # jPhone over http://<tailscale-ip>:8765
+tools/pair-qr.py --https    # jPhone behind tailscale serve (see Optional: HTTPS)
+```
+
+It runs `jcode pair` and prints a QR code in the terminal for a link like `http://100.101.102.103:8765/#pair=100.101.102.103:7643:123456`. Scan it with the phone's camera, check the host, tap **Pair**. The part after `#` is never sent to any server, and jPhone removes it from the address bar once read. Python standard library only (it carries a small QR encoder). `--app URL`, `--gateway HOST:PORT` and `--code 123456` override what it detects.
+
+The QR code from `jcode pair` itself is for jcode's iOS app (`jcode://…`) and does not open jPhone.
+
 ### Start it automatically (macOS)
 
 ```sh
@@ -150,7 +163,7 @@ jPhone is a remote control for an agent that can run commands on your Mac. Treat
 
 **Pairing and tokens**
 
-- A pairing code is single use and expires after 5 minutes.
+- A pairing code is single use and expires after 5 minutes. A [pairing link or QR code](#pair-with-a-qr-code) carries the same code, so treat it like the code: do not paste it into chats or screenshots.
 - Pairing gives the phone a device token, stored in the browser's `localStorage` (jcode keeps only a hash). The token travels in the WebSocket URL (`/ws?token=…`) because browsers cannot set an `Authorization` header on a WebSocket. jcode logs that it saw query-token auth, but not the token.
 
 **Revoking a device**
@@ -189,7 +202,7 @@ tools/screenshots.sh   # regenerate docs/img from the demo (macOS, uses WebKit)
 web/            the app (index.html, styles.css, app.js, lib/, icons/, sw.js)
 test/           headless tests, including replays of real gateway sessions
 spike/          protocol spike client and the recorded fixtures the tests use
-tools/          WebKit screenshot harness and README image composer
+tools/          pair-qr.py, WebKit screenshot harness, README image composer
 serve.py        static server (stdlib only)
 ```
 
