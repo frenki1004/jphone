@@ -9,6 +9,10 @@
 A phone-first web app that talks straight to jcode's built-in gateway.<br />
 Stream replies, watch tool calls, stop or steer a run, and switch sessions, from anywhere on your Tailscale network.
 
+<a href="docs/promo/jphone-promo.mp4"><img src="docs/promo/jphone-promo.gif" alt="jPhone in 19 seconds: pair, pick a project, watch a live run, review changes, switch sessions" /></a>
+
+<sub>▶ <a href="docs/promo/jphone-promo.mp4">Watch in full quality (MP4)</a></sub>
+
 <img src="docs/img/hero.png" alt="jPhone: pairing, a live run with a tool call, and the sessions drawer" />
 
 **No app store · No build step · No third-party servers · One vendored library (jsQR, for the QR scanner)**

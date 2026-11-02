@@ -1,0 +1,13 @@
+<!doctype html><html><head><style>
+html,body{margin:0;width:1280px;height:720px;overflow:hidden;background:radial-gradient(circle at 72% 45%,#123a2e,#0d0f12 62%);font-family:-apple-system,Helvetica;color:#eee}
+.wrap{display:flex;align-items:center;justify-content:center;gap:90px;height:720px}
+.t{width:520px}.k{color:#4fd8a4;font:600 20px ui-monospace,Menlo;letter-spacing:2px}
+h1{font-size:64px;margin:12px 0;line-height:1.02;font-weight:800;letter-spacing:-1px}p{font-size:24px;color:#9aa;margin:0;line-height:1.35}
+.ph{width:290px;height:628px;border-radius:44px;border:8px solid #222;box-shadow:0 30px 80px #000c,0 0 60px #4fd8a433;overflow:hidden;flex:none}
+.ph img{width:100%;display:block}
+.c{flex-direction:column;gap:18px;text-align:center}.c img{width:130px;border-radius:30px;box-shadow:0 0 70px #4fd8a466}
+</style></head><body><div id=r></div><script>
+const q=new URLSearchParams(location.search);
+r.innerHTML=q.get('img')?`<div class=wrap><div class=t><div class=k>${q.get('k')}</div><h1>${q.get('h')}</h1><p>${q.get('p')}</p></div><div class=ph><img src="${q.get('img')}"></div></div>`
+:`<div class="wrap c"><img src="icon-192.png"><h1>${q.get('h')}</h1><p>${q.get('p')}</p></div>`;
+</script></body></html>
